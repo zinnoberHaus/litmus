@@ -1,0 +1,24 @@
+Metric: April Sales (CSV)
+Description: Total sales revenue for completed orders in April 2026, read directly from a CSV export. A minimal end-user example — no database required, just a spreadsheet-style file.
+Owner: demo
+Tags: demo, csv, revenue
+
+Source: sales
+
+Given all records from the sales table
+  And status is "completed"
+  And amount is present
+  And order_date is within April 2026
+
+When we calculate
+  Then sum the amount column across qualifying orders
+  And round to 2 decimal places
+
+The result is "April Sales"
+
+Trust:
+  Freshness must be less than 24 hours
+  Null rate on amount must be less than 5%
+  Null rate on order_id must be 0%
+  Row count must be at least 10
+  Value must be between 1000 and 100000

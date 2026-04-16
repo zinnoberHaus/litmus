@@ -1,0 +1,25 @@
+Metric: Customer Churn Rate
+Description: Percentage of paying customers at the beginning of the period who canceled their subscription during that period. Excludes trial-only accounts, plan downgrades, and involuntary churn from payment failures that are later recovered.
+Owner: customer-success
+Tags: churn, retention, saas, health-metric
+
+Source: subscriptions, subscription_events
+
+Given the customer had an active paid subscription at the start of the period
+  And the subscription is not a free trial
+  And involuntary churn from recovered payment failures is excluded
+
+When we calculate
+  Then count customers whose subscriptions moved to "canceled" or "expired"
+  And divide by the total paying customers at the start of the period
+  And multiply by 100
+
+The result is "Customer Churn Rate"
+
+Trust:
+  Freshness must be less than 12 hours
+  Null rate on status must be less than 0%
+  Null rate on canceled_at must be less than 5%
+  Row count of subscriptions must not drop more than 10% day over day
+  Value must be between 0 and 30
+  Value must not change more than 50% month over month

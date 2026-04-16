@@ -1,0 +1,26 @@
+Metric: Monthly Recurring Revenue
+Description: Total MRR from active subscriptions in the current billing cycle
+Owner: finance-team
+Tags: finance, saas, recurring
+
+Source: subscriptions, payments
+
+Given all records from subscriptions table
+  And status is "active"
+  And billing_date is within current calendar month
+
+When we calculate
+  Then sum the mrr column
+  And exclude trial accounts
+  And round to 2 decimal places
+
+The result is "Monthly Recurring Revenue"
+
+Trust:
+  Freshness must be less than 12 hours
+  Null rate on mrr must be less than 2%
+  Null rate on status must be 0%
+  Row count must not drop more than 10% day over day
+  Row count of payments must not drop more than 15% week over week
+  Value must be between 100,000 and 5,000,000
+  Value must not change more than 30% month over month

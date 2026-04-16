@@ -1,0 +1,28 @@
+# Pattern: time-based SLA / operational metric.
+# Illustrates: duration calculation, tighter freshness window, strict null rates on timing columns.
+Metric: First Response Time (P50)
+Description: Median time in minutes from when a support ticket is opened to the first agent response.
+Owner: customer-support
+Tags: operations, sla, customer-experience
+
+Source: support_tickets, agent_messages
+
+Given all tickets opened in the last 30 days
+  And the ticket has at least one agent response
+  And the ticket channel is "email" or "chat"
+  And the ticket priority is not "spam"
+
+When we calculate
+  Then compute first_response_time as agent_response_at minus ticket_opened_at
+  And take the 50th percentile across all tickets
+  And express the result in minutes
+
+The result is "First Response Time (P50)"
+
+Trust:
+  Freshness must be less than 2 hours
+  Null rate on ticket_opened_at must be 0%
+  Null rate on agent_response_at must be less than 5%
+  Row count must not drop more than 20% day over day
+  Value must be between 1 and 240
+  Value must not change more than 25% week over week

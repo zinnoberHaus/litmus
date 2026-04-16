@@ -1,0 +1,24 @@
+Metric: Recent Order Revenue (SQLite)
+Description: Revenue from completed orders in the last 7 days, pulled from an app's local SQLite database. The pattern for trust-checking an application DB directly — no ETL required.
+Owner: demo
+Tags: demo, sqlite, revenue
+
+Source: orders
+
+Given all records from the orders table
+  And status is "completed"
+  And amount is present
+  And order_date is within the last 7 days
+
+When we calculate
+  Then sum the amount column across qualifying orders
+  And round to 2 decimal places
+
+The result is "Recent Order Revenue"
+
+Trust:
+  Freshness must be less than 24 hours
+  Null rate on amount must be less than 5%
+  Null rate on order_id must be 0%
+  Row count must be at least 5
+  Value must be between 100 and 1000000

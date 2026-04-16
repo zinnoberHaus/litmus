@@ -1,0 +1,27 @@
+Metric: Gross Merchandise Revenue
+Description: Total gross revenue from all completed e-commerce orders before returns and chargebacks. Includes product subtotals, shipping, and taxes collected. Reported in the store's base currency (USD).
+Owner: ecommerce-analytics
+Tags: revenue, gmv, ecommerce, finance
+
+Source: orders, invoices
+
+Given the order status is "completed"
+  And the invoice status is "finalized"
+  And the order was placed within the reporting period
+  And the currency has been normalized to USD
+
+When we calculate
+  Then sum the net amount from all qualifying order invoices
+  And include tax collected
+  And exclude orders still in "pending" or "canceled" status
+
+The result is "Gross Merchandise Revenue"
+
+Trust:
+  Freshness must be less than 2 hours
+  Null rate on net_amount must be less than 0%
+  Null rate on currency must be less than 0%
+  Null rate on status must be less than 0%
+  Row count of orders must not drop more than 20% day over day
+  Value must be between 100 and 50000000
+  Value must not change more than 50% month over month

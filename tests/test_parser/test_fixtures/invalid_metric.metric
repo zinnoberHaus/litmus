@@ -1,0 +1,10 @@
+# This file is intentionally missing the Metric: header line.
+Description: This should fail to parse
+Owner: nobody
+
+Source: some_table
+
+Given all records from some_table
+When we calculate
+  Then count the rows
+The result is "Bad Metric"

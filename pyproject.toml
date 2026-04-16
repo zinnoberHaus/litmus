@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "litmus-data"
+version = "0.1.0"
+description = "BDD-style metric definitions with built-in data trust checks"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "Litmus Contributors" }]
+maintainers = [{ name = "Zinnober Haus", email = "zinnober.haus@gmail.com" }]
+keywords = ["data", "metrics", "bdd", "data-quality", "trust"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "click>=8.0",
+    "rich>=13.0",
+    "pyyaml>=6.0",
+    "duckdb>=0.9.0",
+    "jinja2>=3.0",
+]
+
+[project.optional-dependencies]
+snowflake = ["snowflake-connector-python>=3.0"]
+bigquery = ["google-cloud-bigquery>=3.0"]
+postgres = ["psycopg2-binary>=2.9"]
+all = ["litmus-data[snowflake,bigquery,postgres]"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+
+[project.scripts]
+litmus = "litmus.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/zinnoberHaus/litmus"
+Source = "https://github.com/zinnoberHaus/litmus"
+Documentation = "https://github.com/zinnoberHaus/litmus#readme"
+Issues = "https://github.com/zinnoberHaus/litmus/issues"
+Changelog = "https://github.com/zinnoberHaus/litmus/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+include = ["litmus*"]
+
+[tool.setuptools.package-data]
+"litmus.generators" = ["assets/*.png"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true

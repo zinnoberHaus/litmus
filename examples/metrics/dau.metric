@@ -1,0 +1,26 @@
+# Pattern: count-distinct metric.
+# Illustrates: strict null-rate on the identity column (0%), tight freshness window.
+Metric: Daily Active Users
+Description: Count of distinct users who had at least one tracked event during the current calendar day.
+Owner: product-analytics
+Tags: product, engagement, north-star
+
+Source: events
+
+Given all events from the current calendar day
+  And event_type is in ("page_view", "click", "api_call")
+  And user_id is not null
+  And environment is "production"
+
+When we calculate
+  Then count distinct user_id
+
+The result is "Daily Active Users"
+
+Trust:
+  Freshness must be less than 1 hour
+  Null rate on user_id must be 0%
+  Null rate on event_type must be less than 0.1%
+  Row count must not drop more than 30% day over day
+  Value must be between 1000 and 500000
+  Value must not change more than 40% day over day

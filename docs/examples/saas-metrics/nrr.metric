@@ -1,0 +1,28 @@
+Metric: Net Revenue Retention
+Description: Measures the percentage of recurring revenue retained from existing customers over a period, including expansion (upgrades, cross-sells) and contraction (downgrades, churn). A value above 100% indicates net expansion.
+Owner: revenue-ops
+Tags: nrr, retention, expansion, saas, board-metric
+
+Source: subscriptions, subscription_events
+
+Given we are looking at customers who had active subscriptions at the start of the period
+  And we include only paid plans (excluding trials)
+  And we track the same cohort of customers across the full period
+
+When we calculate
+  Then take the starting MRR for the cohort at period begin
+  And add expansion MRR from upgrades and cross-sells during the period
+  And subtract contraction MRR from downgrades during the period
+  And subtract churned MRR from cancellations and expirations
+  And divide the ending cohort MRR by the starting cohort MRR
+  And multiply by 100
+
+The result is "Net Revenue Retention"
+
+Trust:
+  Freshness must be less than 12 hours
+  Null rate on plan_amount must be less than 0%
+  Null rate on event_type must be less than 0%
+  Row count of subscription_events must not drop more than 20% day over day
+  Value must be between 50 and 200
+  Value must not change more than 25% month over month

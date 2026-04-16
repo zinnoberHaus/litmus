@@ -1,0 +1,25 @@
+Metric: Monthly Churn Rate
+Description: Percentage of active subscribers at the start of the month who canceled or did not renew by month end. Excludes plan downgrades and trial expirations.
+Owner: growth-team
+Tags: churn, retention, saas, monthly
+
+Source: subscriptions, subscription_events
+
+Given the subscription was active at the start of the month
+  And the subscription is not a free trial
+  And the customer has been active for at least one full billing cycle
+
+When we calculate
+  Then count subscriptions that transitioned to "canceled" or "expired" during the month
+  And divide by the total active subscriptions at the start of the month
+  And multiply by 100 to express as a percentage
+
+The result is "Monthly Churn Rate"
+
+Trust:
+  Freshness must be less than 12 hours
+  Null rate on status must be less than 0%
+  Null rate on canceled_at must be less than 2%
+  Row count of subscriptions must not drop more than 10% day over day
+  Value must be between 0 and 25
+  Value must not change more than 30% month over month

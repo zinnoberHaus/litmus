@@ -1,0 +1,37 @@
+# Example: run `litmus check` on every pull request and post a summary comment.
+# Copy this file into your own repo under .github/workflows/, adjust `path:`
+# to match your metrics directory, and you're done.
+
+name: Litmus trust check
+
+on:
+  pull_request:
+    paths:
+      - "metrics/**/*.metric"
+      - "litmus.yml"
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  litmus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Litmus
+        id: litmus
+        uses: litmus-data/litmus@v0           # or `./` when testing locally
+        with:
+          path: metrics/
+          # config: litmus.yml                # optional
+          # extras: postgres                  # uncomment if you need psycopg2
+          # fail-on-warning: "false"
+
+      - name: Comment on PR with trust summary
+        if: always() && github.event.pull_request
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: litmus
+          message: ${{ steps.litmus.outputs.summary-markdown }}

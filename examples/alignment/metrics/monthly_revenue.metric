@@ -1,0 +1,27 @@
+Metric: Monthly Revenue
+Description: Total revenue from completed orders in the current calendar month, net of refunds, reported in USD. This definition is the cross-functional contract approved by Finance, Analytics, and Engineering on 2026-04-02.
+Owner: finance-analytics
+Tags: finance, revenue, monthly, executive-kpi, certified
+
+Source: orders, refunds
+
+Given all records from the orders table
+  And status is "completed"
+  And amount is present (USD converted)
+  And order_date is within the current calendar month
+
+When we calculate
+  Then sum the amount column across qualifying orders
+  And subtract the sum of refund_amount from the refunds table for the same orders
+  And round to 2 decimal places
+
+The result is "Monthly Revenue"
+
+Trust:
+  Freshness must be less than 6 hours
+  Null rate on amount must be less than 5%
+  Null rate on order_id must be 0%
+  Null rate on status must be 0%
+  Row count must not drop more than 20% day over day
+  Value must be between 1000000 and 20000000
+  Value must not change more than 30% month over month

@@ -1,0 +1,27 @@
+# Pattern: "bad metric" (lower is better) — bounded percentage.
+# Illustrates: no-change-threshold flexibility, multi-source funnel with strict lower/upper range.
+Metric: Cart Abandonment Rate
+Description: Percentage of shopping carts created in the last 24 hours that were never checked out.
+Owner: ecommerce-team
+Tags: ecommerce, funnel, weekly-review
+
+Source: carts, checkouts
+
+Given all carts created in the last 24 hours
+  And the cart has at least one item
+  And the user is not an internal test account
+
+When we calculate
+  Then count carts without a matching checkout record
+  And divide by total carts created in the same window
+  And multiply by 100 to get a percentage
+
+The result is "Cart Abandonment Rate"
+
+Trust:
+  Freshness must be less than 2 hours
+  Null rate on cart_id must be 0%
+  Null rate on user_id must be less than 1%
+  Row count must not drop more than 30% day over day
+  Value must be between 40 and 85
+  Value must not change more than 10% week over week

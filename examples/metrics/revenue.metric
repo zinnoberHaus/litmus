@@ -1,0 +1,28 @@
+Metric: Monthly Revenue
+Description: Total revenue recognized across all channels in a calendar month, including one-time purchases, subscription charges, and usage-based fees.
+Owner: finance-analytics
+Tags: revenue, finance, monthly, executive-kpi
+
+Source: orders, invoices
+
+Given the order status is "completed" or "refunded"
+  And the invoice has been finalized
+  And the reporting period is the current calendar month
+
+When we calculate
+  Then sum the net amount from finalized invoices
+  And subtract refunds and credit adjustments
+  And convert all amounts to USD using end-of-day exchange rates
+
+The result is "Monthly Revenue"
+
+Trust:
+  Freshness must be less than 6 hours
+  Null rate on net_amount must be less than 1%
+  Null rate on currency must be less than 0%
+  Row count must not drop more than 15% day over day
+  Value must be between 10000 and 5000000
+  Value must not change more than 40% month over month
+  Duplicate rate on invoice_id must be 0%
+  Schema must not drift
+  Mean of net_amount must not change more than 25% month over month

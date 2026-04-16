@@ -1,0 +1,26 @@
+Metric: Order Conversion Rate
+Description: Percentage of unique sessions that result in a completed order. Measures the effectiveness of the purchase funnel from product view through checkout completion. Excludes bot traffic and internal test accounts.
+Owner: growth-analytics
+Tags: conversion, funnel, ecommerce, growth
+
+Source: orders, sessions
+
+Given the session is from an identified non-bot visitor
+  And the session occurred within the reporting period
+  And internal test accounts are excluded
+  And only the first order per session is counted
+
+When we calculate
+  Then count distinct sessions that produced at least one completed order
+  And divide by the total distinct qualifying sessions
+  And multiply by 100
+
+The result is "Order Conversion Rate"
+
+Trust:
+  Freshness must be less than 1 hours
+  Null rate on session_id must be less than 1%
+  Null rate on status must be less than 0%
+  Row count of orders must not drop more than 30% day over day
+  Value must be between 0.1 and 25
+  Value must not change more than 35% week over week

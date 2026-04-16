@@ -1,0 +1,25 @@
+Metric: Monthly Recurring Revenue
+Description: Sum of normalized monthly subscription fees from all active paying customers. Annual plans are divided by 12. Excludes one-time charges, usage overages, and free trials.
+Owner: finance-analytics
+Tags: mrr, revenue, saas, subscription, executive-kpi
+
+Source: subscriptions, invoices
+
+Given the subscription status is "active" or "past_due"
+  And the subscription has a paid plan (not free or trial)
+  And the billing interval is monthly or annual
+
+When we calculate
+  Then sum the recurring charge amount for each active subscription
+  And normalize annual subscriptions by dividing by 12
+  And exclude any one-time add-on charges or usage overages
+
+The result is "Monthly Recurring Revenue"
+
+Trust:
+  Freshness must be less than 4 hours
+  Null rate on plan_amount must be less than 0%
+  Null rate on billing_interval must be less than 0%
+  Row count of subscriptions must not drop more than 5% day over day
+  Value must be between 5000 and 10000000
+  Value must not change more than 20% month over month

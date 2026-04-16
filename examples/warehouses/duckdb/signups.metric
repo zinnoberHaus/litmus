@@ -1,0 +1,23 @@
+Metric: Daily Signups (DuckDB)
+Description: Count of distinct users who signed up in the last day, read from a persisted DuckDB analytics file.
+Owner: demo
+Tags: demo, duckdb, growth
+
+Source: events
+
+Given all records from the events table
+  And event_type is "signup"
+  And event_date is today
+  And user_id is present
+
+When we calculate
+  Then count distinct user_id values
+
+The result is "Daily Signups"
+
+Trust:
+  Freshness must be less than 6 hours
+  Null rate on user_id must be 0%
+  Null rate on event_id must be 0%
+  Value must be between 0 and 100000
+  Row count must be at least 1

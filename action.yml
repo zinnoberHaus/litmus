@@ -1,0 +1,171 @@
+name: "Litmus check"
+description: >
+  Run `litmus check` against a path on every pull request. Emits a JSON
+  report artifact and a formatted Markdown summary that workflows can
+  paste into a PR comment.
+author: "Litmus Contributors"
+branding:
+  icon: "activity"
+  color: "purple"
+
+inputs:
+  path:
+    description: "Path to a .metric file or directory of .metric files."
+    required: true
+    default: "metrics/"
+  config:
+    description: "Path to litmus.yml (optional)."
+    required: false
+    default: ""
+  python-version:
+    description: "Python version to install Litmus on."
+    required: false
+    default: "3.12"
+  litmus-version:
+    description: "Version of the litmus-data package to install (pin for reproducible CI)."
+    required: false
+    default: ""
+  fail-on-warning:
+    description: "If 'true', exit non-zero when any check is a WARNING (default: only FAIL/ERROR exit non-zero)."
+    required: false
+    default: "false"
+  extras:
+    description: "Optional extras to install, e.g. 'postgres,snowflake'. Leave blank for none."
+    required: false
+    default: ""
+
+outputs:
+  report-json:
+    description: "Path to the JSON report produced by litmus check."
+    value: ${{ steps.litmus.outputs.report-json }}
+  trust-score:
+    description: "Aggregate trust score across all metrics, rendered as 'score/total'."
+    value: ${{ steps.litmus.outputs.trust-score }}
+  summary-markdown:
+    description: "Rendered Markdown summary suitable for posting as a PR comment."
+    value: ${{ steps.litmus.outputs.summary-markdown }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install litmus-data
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        if [[ -n "${{ inputs.extras }}" ]]; then
+          pkg="litmus-data[${{ inputs.extras }}]"
+        else
+          pkg="litmus-data"
+        fi
+        if [[ -n "${{ inputs.litmus-version }}" ]]; then
+          pip install "${pkg}==${{ inputs.litmus-version }}"
+        else
+          pip install "${pkg}"
+        fi
+
+    - name: Run litmus check
+      id: litmus
+      shell: bash
+      run: |
+        set +e
+        mkdir -p .litmus
+        report=".litmus/report.json"
+
+        config_arg=""
+        if [[ -n "${{ inputs.config }}" ]]; then
+          config_arg="--config ${{ inputs.config }}"
+        fi
+
+        litmus check "${{ inputs.path }}" $config_arg --format json --output "$report"
+        check_exit=$?
+
+        if [[ ! -s "$report" ]]; then
+          echo "::error::litmus check produced no JSON report at $report"
+          exit 1
+        fi
+
+        # Render a compact Markdown summary using Python (no yq dependency).
+        summary=$(python - <<PY
+        import json, os
+        data = json.load(open(".litmus/report.json"))
+        lines = ["### 🧪 Litmus trust-check summary", ""]
+        lines.append(f"_schema: `{data.get('schema_version','v1')}` · generated `{data.get('generated_at','')}`_")
+        lines.append("")
+        lines.append("| Metric | Trust score | Status |")
+        lines.append("|--------|------------:|:------:|")
+        agg_score = 0.0
+        agg_total = 0
+        for m in data["metrics"]:
+            score = m.get("trust_score", 0)
+            total = m.get("trust_total", 0)
+            agg_score += score
+            agg_total += total
+            failing = any(c["status"] in ("failed", "error") for c in m.get("checks", []))
+            warning = any(c["status"] == "warning" for c in m.get("checks", []))
+            icon = "🔴" if failing else ("🟡" if warning else "🟢")
+            lines.append(f"| {m['name']} | {score:g}/{total} | {icon} |")
+        lines.append("")
+        summary = data.get("summary", {})
+        lines.append(
+            f"**Totals:** {summary.get('healthy',0)} healthy · "
+            f"{summary.get('warning',0)} warning · {summary.get('failing',0)} failing · "
+            f"aggregate {agg_score:g}/{agg_total}"
+        )
+        lines.append("")
+        # Per-metric failing-rule breakdown
+        any_failing = False
+        for m in data["metrics"]:
+            fails = [c for c in m.get("checks", []) if c["status"] in ("failed", "error")]
+            if fails:
+                any_failing = True
+                lines.append(f"<details><summary>❌ {m['name']} — {len(fails)} failing rule(s)</summary>")
+                lines.append("")
+                for c in fails:
+                    lines.append(f"- **{c['name']}** — {c['message']}")
+                lines.append("")
+                lines.append("</details>")
+        if not any_failing:
+            lines.append("_No failing rules._")
+        print("\n".join(lines))
+        PY
+        )
+
+        # Expose outputs
+        {
+          echo "report-json=$report"
+          echo "trust-score=$(python -c 'import json,sys;d=json.load(open(".litmus/report.json"));s=t=0
+        for m in d["metrics"]:
+            s+=m.get("trust_score",0); t+=m.get("trust_total",0)
+        print(f"{s:g}/{t}")')"
+          echo "summary-markdown<<LITMUS_EOF"
+          echo "$summary"
+          echo "LITMUS_EOF"
+        } >> "$GITHUB_OUTPUT"
+
+        # Also write to the step summary so it shows up on the Actions tab.
+        echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+
+        # Honor fail-on-warning.
+        if [[ "${{ inputs.fail-on-warning }}" == "true" ]]; then
+          warning_count=$(python -c 'import json;print(json.load(open(".litmus/report.json"))["summary"]["warning"])')
+          if [[ "$warning_count" != "0" ]]; then
+            echo "::error::fail-on-warning=true and $warning_count metric(s) had warnings"
+            exit 2
+          fi
+        fi
+
+        exit $check_exit
+
+    - name: Upload report artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: litmus-report
+        path: .litmus/report.json
+        if-no-files-found: warn
+        retention-days: 14

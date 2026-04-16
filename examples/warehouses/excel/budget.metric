@@ -1,0 +1,22 @@
+Metric: Budget Utilization (Excel)
+Description: Total dollars spent against budget across all departments, read from a Finance-owned spreadsheet. The "Finance emails you an xlsx every Monday" scenario.
+Owner: demo
+Tags: demo, excel, finance
+
+Source: budget
+
+Given all records from the budget table
+  And budgeted is present
+  And spent is present
+
+When we calculate
+  Then sum the spent column across all rows
+
+The result is "Budget Utilization"
+
+Trust:
+  Freshness must be less than 72 hours
+  Null rate on spent must be 0%
+  Null rate on budgeted must be 0%
+  Row count must be at least 10
+  Value must be between 100000 and 10000000

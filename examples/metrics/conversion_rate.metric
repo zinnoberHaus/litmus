@@ -1,0 +1,28 @@
+# Pattern: funnel conversion as a percentage.
+# Illustrates: percentage range bounded 0-100, ratio calculation, multi-event source.
+Metric: Signup Conversion Rate
+Description: Percentage of unique landing-page visitors who completed the signup form within the same session.
+Owner: growth-team
+Tags: growth, funnel, acquisition
+
+Source: sessions, signups
+
+Given all sessions that started in the last 7 days
+  And the session had at least one landing_page_view
+  And the traffic source is not "internal"
+
+When we calculate
+  Then count distinct sessions that completed signup
+  And divide by total distinct sessions
+  And multiply by 100 to get a percentage
+  And round to 2 decimal places
+
+The result is "Signup Conversion Rate"
+
+Trust:
+  Freshness must be less than 4 hours
+  Null rate on session_id must be 0%
+  Null rate on traffic_source must be less than 2%
+  Row count must not drop more than 20% day over day
+  Value must be between 0.5 and 25
+  Value must not change more than 15% week over week

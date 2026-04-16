@@ -1,0 +1,23 @@
+# Litmus configuration for the SaaS demo project
+# See: https://github.com/litmus-metrics/litmus
+
+version: 1
+
+# Where .metric files are stored (relative to this config file)
+metrics_dir: metrics/
+
+# Data warehouse connection
+warehouse:
+  type: duckdb
+  database: sample_data/demo.duckdb
+
+# Default thresholds applied when a metric omits Trust rules
+defaults:
+  freshness: 24 hours
+  null_rate: 5%
+  volume_change: 25%
+
+# Output configuration
+reporting:
+  format: console
+  colors: true
