@@ -1,0 +1,14 @@
+version: 1
+metrics_dir: .
+
+warehouse:
+  type: duckdb
+  database: budget.duckdb
+
+defaults:
+  freshness: 72 hours
+  null_rate: 5%
+
+reporting:
+  format: console
+  colors: true

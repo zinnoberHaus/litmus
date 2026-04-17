@@ -18,7 +18,7 @@ env/
 *.so
 .DS_Store
 litmus.yml
-!examples/litmus.yml
+!examples/**/litmus.yml
 
 # Litmus runtime output
 .litmus/

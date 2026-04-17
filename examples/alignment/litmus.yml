@@ -1,0 +1,15 @@
+version: 1
+metrics_dir: metrics/
+
+warehouse:
+  type: duckdb
+  database: alignment_demo.duckdb
+
+defaults:
+  freshness: 24 hours
+  null_rate: 5%
+  volume_change: 25%
+
+reporting:
+  format: console
+  colors: true
