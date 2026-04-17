@@ -196,26 +196,30 @@ def generate_metric_file(spec: MetricSpec) -> str:
         lines.append("Trust:")
         if spec.trust.freshness:
             lines.append(f"  Freshness must be less than {spec.trust.freshness.max_hours:g} hours")
-        for rule in spec.trust.null_rules:
-            if rule.max_percentage == 0:
-                lines.append(f"  Null rate on {rule.column} must be 0%")
+        for null_rule in spec.trust.null_rules:
+            if null_rule.max_percentage == 0:
+                lines.append(f"  Null rate on {null_rule.column} must be 0%")
             else:
                 lines.append(
-                    f"  Null rate on {rule.column}"
-                    f" must be less than {rule.max_percentage:g}%"
+                    f"  Null rate on {null_rule.column}"
+                    f" must be less than {null_rule.max_percentage:g}%"
                 )
-        for rule in spec.trust.volume_rules:
-            table_part = f" of {rule.table}" if rule.table else ""
+        for volume_rule in spec.trust.volume_rules:
+            table_part = f" of {volume_rule.table}" if volume_rule.table else ""
             lines.append(
                 f"  Row count{table_part} must not drop more than "
-                f"{rule.max_drop_percentage:g}% {rule.period} over {rule.period}"
+                f"{volume_rule.max_drop_percentage:g}%"
+                f" {volume_rule.period} over {volume_rule.period}"
             )
-        for rule in spec.trust.range_rules:
-            lines.append(f"  Value must be between {rule.min_value:g} and {rule.max_value:g}")
-        for rule in spec.trust.change_rules:
+        for range_rule in spec.trust.range_rules:
             lines.append(
-                f"  Value must not change more than {rule.max_change_percentage:g}% "
-                f"{rule.period} over {rule.period}"
+                f"  Value must be between {range_rule.min_value:g}"
+                f" and {range_rule.max_value:g}"
+            )
+        for change_rule in spec.trust.change_rules:
+            lines.append(
+                f"  Value must not change more than {change_rule.max_change_percentage:g}% "
+                f"{change_rule.period} over {change_rule.period}"
             )
 
     lines.append("")

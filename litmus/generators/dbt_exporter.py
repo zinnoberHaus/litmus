@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 
@@ -169,7 +169,7 @@ def _build_model_yaml(spec: MetricSpec, mappings: list[RuleMapping]) -> str:
                     ),
                 ))
 
-    model = {
+    model: dict[str, Any] = {
         "name": _slug(spec.name),
         "description": _description_block(spec),
         "config": {"tags": ["litmus"]},

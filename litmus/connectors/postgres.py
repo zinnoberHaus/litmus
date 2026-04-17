@@ -60,7 +60,8 @@ class PostgresConnector(BaseConnector):
         qualified = f"{self._schema}.{table}" if self._schema else table
         rows = self.execute_query(f"SELECT MAX({col}) as max_ts FROM {qualified}")
         if rows and rows[0]["max_ts"] is not None:
-            return rows[0]["max_ts"]
+            ts = rows[0]["max_ts"]
+            return ts if isinstance(ts, datetime) else datetime.fromisoformat(str(ts))
         return None
 
     def get_row_count(self, table: str, conditions: list[str] | None = None) -> int:
@@ -81,7 +82,7 @@ class PostgresConnector(BaseConnector):
         total = rows[0]["total"]
         if total == 0:
             return 0.0
-        return (rows[0]["nulls"] / total) * 100.0
+        return float(rows[0]["nulls"]) / float(total) * 100.0
 
     def get_column_sum(self, table: str, column: str) -> float | None:
         qualified = f"{self._schema}.{table}" if self._schema else table

@@ -64,7 +64,7 @@ class DuckDBConnector(BaseConnector):
         total = rows[0]["total"]
         if total == 0:
             return 0.0
-        return (rows[0]["nulls"] / total) * 100.0
+        return float(rows[0]["nulls"]) / float(total) * 100.0
 
     def get_column_sum(self, table: str, column: str) -> float | None:
         rows = self.execute_query(f"SELECT SUM({column}) as total FROM {table}")

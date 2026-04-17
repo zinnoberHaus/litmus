@@ -53,29 +53,30 @@ def explain(spec: MetricSpec) -> str:
                 f"  - The data is no more than"
                 f" {spec.trust.freshness.max_hours:g} hours old"
             )
-        for rule in spec.trust.null_rules:
-            if rule.max_percentage == 0:
-                lines.append(f"  - No {rule.column} values are missing")
+        for null_rule in spec.trust.null_rules:
+            if null_rule.max_percentage == 0:
+                lines.append(f"  - No {null_rule.column} values are missing")
             else:
                 lines.append(
-                    f"  - Less than {rule.max_percentage:g}%"
-                    f" of {rule.column} values are missing"
+                    f"  - Less than {null_rule.max_percentage:g}%"
+                    f" of {null_rule.column} values are missing"
                 )
-        for rule in spec.trust.volume_rules:
-            table_note = f" in {rule.table}" if rule.table else ""
+        for volume_rule in spec.trust.volume_rules:
+            table_note = f" in {volume_rule.table}" if volume_rule.table else ""
             lines.append(
                 f"  - Row count{table_note} hasn't dropped more than "
-                f"{rule.max_drop_percentage:g}% {rule.period} over {rule.period}"
+                f"{volume_rule.max_drop_percentage:g}%"
+                f" {volume_rule.period} over {volume_rule.period}"
             )
-        for rule in spec.trust.range_rules:
+        for range_rule in spec.trust.range_rules:
             lines.append(
                 f"  - The total is between"
-                f" {rule.min_value:,.0f} and {rule.max_value:,.0f}"
+                f" {range_rule.min_value:,.0f} and {range_rule.max_value:,.0f}"
             )
-        for rule in spec.trust.change_rules:
+        for change_rule in spec.trust.change_rules:
             lines.append(
-                f"  - It hasn't changed more than {rule.max_change_percentage:g}% "
-                f"from last {rule.period}"
+                f"  - It hasn't changed more than {change_rule.max_change_percentage:g}% "
+                f"from last {change_rule.period}"
             )
         for dup_rule in spec.trust.duplicate_rules:
             if dup_rule.max_percentage == 0:

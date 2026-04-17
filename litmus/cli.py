@@ -184,18 +184,25 @@ def parse(file: str):
         console.print("  trust_rules:")
         if spec.trust.freshness:
             console.print(f"    - freshness: < {spec.trust.freshness.max_hours} hours")
-        for rule in spec.trust.null_rules:
-            console.print(f"    - null_rate({rule.column}): < {rule.max_percentage}%")
-        for rule in spec.trust.volume_rules:
-            table = f"({rule.table})" if rule.table else ""
+        for null_rule in spec.trust.null_rules:
+            console.print(
+                f"    - null_rate({null_rule.column}): < {null_rule.max_percentage}%"
+            )
+        for volume_rule in spec.trust.volume_rules:
+            table = f"({volume_rule.table})" if volume_rule.table else ""
             console.print(
                 f"    - volume_change{table}"
-                f"({rule.period}): < {rule.max_drop_percentage}%"
+                f"({volume_rule.period}): < {volume_rule.max_drop_percentage}%"
             )
-        for rule in spec.trust.range_rules:
-            console.print(f"    - value_range: [{rule.min_value}, {rule.max_value}]")
-        for rule in spec.trust.change_rules:
-            console.print(f"    - value_change({rule.period}): < {rule.max_change_percentage}%")
+        for range_rule in spec.trust.range_rules:
+            console.print(
+                f"    - value_range: [{range_rule.min_value}, {range_rule.max_value}]"
+            )
+        for change_rule in spec.trust.change_rules:
+            console.print(
+                f"    - value_change({change_rule.period}):"
+                f" < {change_rule.max_change_percentage}%"
+            )
         for dup_rule in spec.trust.duplicate_rules:
             console.print(
                 f"    - duplicate_rate({dup_rule.column}):"

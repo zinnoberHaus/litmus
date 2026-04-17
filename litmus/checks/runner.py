@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from litmus.checks.history import HistoryStore
+    from litmus.connectors.base import BaseConnector
+    from litmus.spec.metric_spec import MetricSpec
 
 
 class CheckStatus(Enum):
@@ -76,11 +82,11 @@ class CheckSuite:
 
 
 def run_checks(
-    connector: BaseConnector,  # noqa: F821
-    spec: MetricSpec,  # noqa: F821
+    connector: BaseConnector,
+    spec: MetricSpec,
     timestamp_column: str | None = None,
     value_column: str | None = None,
-    history: HistoryStore | None = None,  # noqa: F821
+    history: HistoryStore | None = None,
     run_id: str | None = None,
     commit_sha: str | None = None,
 ) -> CheckSuite:
@@ -119,13 +125,13 @@ def run_checks(
         )
 
     # Null rates
-    for rule in spec.trust.null_rules:
-        suite.results.append(check_null_rate(connector, primary_table, rule))
+    for null_rule in spec.trust.null_rules:
+        suite.results.append(check_null_rate(connector, primary_table, null_rule))
 
     # Volume
-    for rule in spec.trust.volume_rules:
+    for volume_rule in spec.trust.volume_rules:
         ts_col = timestamp_column or "updated_at"
-        suite.results.append(check_volume(connector, primary_table, rule, ts_col))
+        suite.results.append(check_volume(connector, primary_table, volume_rule, ts_col))
 
     # Range (also yields the canonical "current value" we feed to change rules + history)
     v_col = value_column or "amount"
@@ -135,12 +141,12 @@ def run_checks(
     except Exception:
         current_value = None
 
-    for rule in spec.trust.range_rules:
-        suite.results.append(check_range(connector, primary_table, v_col, rule))
+    for range_rule in spec.trust.range_rules:
+        suite.results.append(check_range(connector, primary_table, v_col, range_rule))
 
     # Change rules — compare current value against history
-    for rule in spec.trust.change_rules:
-        suite.results.append(check_change(rule, spec.name, current_value, history))
+    for change_rule in spec.trust.change_rules:
+        suite.results.append(check_change(change_rule, spec.name, current_value, history))
 
     # Duplicate-rate rules — stateless, table + column
     for dup_rule in spec.trust.duplicate_rules:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from litmus.connectors.base import BaseConnector
 
@@ -17,7 +18,7 @@ class BigQueryConnector(BaseConnector):
         self._project = project
         self._dataset = dataset
         self._credentials_path = credentials_path
-        self._client = None
+        self._client: Any = None
 
     def connect(self) -> None:
         try:
@@ -32,6 +33,7 @@ class BigQueryConnector(BaseConnector):
     def execute_query(self, sql: str) -> list[dict]:
         if self._client is None:
             self.connect()
+        assert self._client is not None
         query_job = self._client.query(sql)
         return [dict(row) for row in query_job.result()]
 
@@ -42,7 +44,8 @@ class BigQueryConnector(BaseConnector):
         qualified = f"`{self._project}.{self._dataset}.{table}`"
         rows = self.execute_query(f"SELECT MAX({col}) as max_ts FROM {qualified}")
         if rows and rows[0]["max_ts"] is not None:
-            return rows[0]["max_ts"]
+            ts = rows[0]["max_ts"]
+            return ts if isinstance(ts, datetime) else datetime.fromisoformat(str(ts))
         return None
 
     def get_row_count(self, table: str, conditions: list[str] | None = None) -> int:
@@ -63,7 +66,7 @@ class BigQueryConnector(BaseConnector):
         total = rows[0]["total"]
         if total == 0:
             return 0.0
-        return (rows[0]["nulls"] / total) * 100.0
+        return float(rows[0]["nulls"]) / float(total) * 100.0
 
     def get_column_sum(self, table: str, column: str) -> float | None:
         qualified = f"`{self._project}.{self._dataset}.{table}`"

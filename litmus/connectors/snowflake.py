@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from litmus.connectors.base import BaseConnector
 
@@ -32,7 +33,7 @@ class SnowflakeConnector(BaseConnector):
         if role:
             self._params["role"] = role
         self._schema = schema
-        self._conn = None
+        self._conn: Any = None
 
     def connect(self) -> None:
         try:
@@ -66,7 +67,8 @@ class SnowflakeConnector(BaseConnector):
         qualified = f"{self._schema}.{table}" if self._schema else table
         rows = self.execute_query(f"SELECT MAX({col}) as MAX_TS FROM {qualified}")
         if rows and rows[0]["MAX_TS"] is not None:
-            return rows[0]["MAX_TS"]
+            ts = rows[0]["MAX_TS"]
+            return ts if isinstance(ts, datetime) else datetime.fromisoformat(str(ts))
         return None
 
     def get_row_count(self, table: str, conditions: list[str] | None = None) -> int:
@@ -87,7 +89,7 @@ class SnowflakeConnector(BaseConnector):
         total = rows[0]["TOTAL"]
         if total == 0:
             return 0.0
-        return (rows[0]["NULLS"] / total) * 100.0
+        return float(rows[0]["NULLS"]) / float(total) * 100.0
 
     def get_column_sum(self, table: str, column: str) -> float | None:
         qualified = f"{self._schema}.{table}" if self._schema else table

@@ -67,7 +67,7 @@ class SQLiteConnector(BaseConnector):
         if total == 0:
             return 0.0
         nulls = rows[0]["nulls"] or 0
-        return (nulls / total) * 100.0
+        return float(nulls) / float(total) * 100.0
 
     def get_column_sum(self, table: str, column: str) -> float | None:
         rows = self.execute_query(f"SELECT SUM({column}) as total FROM {table}")
