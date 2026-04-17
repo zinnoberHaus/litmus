@@ -63,23 +63,34 @@ class TestRangeFailed:
 
 
 class TestRangeWarning:
-    """Value is near the boundary of the range (within 10% margin)."""
+    """Value is near the boundary of the range (within 10% of the boundary's magnitude)."""
 
     def test_near_lower_boundary_warns(self):
-        # range 0-1000, margin = 100; SUM = 50 => within boundary margin
-        connector = _make_connector([50.0])
-        rule = RangeRule(min_value=0.0, max_value=1000.0)
+        # range 100-200; lower margin = abs(100)*0.1 = 10; SUM = 105 => within
+        # 10 of the lower boundary, so WARNING.
+        connector = _make_connector([105.0])
+        rule = RangeRule(min_value=100.0, max_value=200.0)
         result = check_range(connector, "orders", "amount", rule)
 
         assert result.status == CheckStatus.WARNING
 
     def test_near_upper_boundary_warns(self):
-        # range 0-1000, margin = 100; SUM = 950 => within upper margin
+        # range 0-1000; upper margin = abs(1000)*0.1 = 100; SUM = 950 => within upper margin
         connector = _make_connector([950.0])
         rule = RangeRule(min_value=0.0, max_value=1000.0)
         result = check_range(connector, "orders", "amount", rule)
 
         assert result.status == CheckStatus.WARNING
+
+    def test_small_value_on_wide_zero_indexed_range_passes(self):
+        # Regression for the first-run "yellow by default" papercut: range
+        # 0-10M with a value of 3,181 should be PASSED, not WARNING. The old
+        # flat-10%-of-range-width logic would have flagged this.
+        connector = _make_connector([3181.0])
+        rule = RangeRule(min_value=0.0, max_value=10_000_000.0)
+        result = check_range(connector, "orders", "amount", rule)
+
+        assert result.status == CheckStatus.PASSED
 
 
 class TestRangeError:

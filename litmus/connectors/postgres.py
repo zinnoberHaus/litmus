@@ -32,13 +32,27 @@ class PostgresConnector(BaseConnector):
     def connect(self) -> None:
         try:
             import psycopg2
-            import psycopg2.extras
+            import psycopg2.extras  # noqa: F401  (side-effect import)
         except ImportError:
             raise ImportError(
                 "psycopg2 is required for the PostgreSQL connector. "
                 "Install it with: pip install 'litmus-data[postgres]'"
             )
-        self._conn = psycopg2.connect(**self._dsn)
+        try:
+            self._conn = psycopg2.connect(**self._dsn)
+        except psycopg2.OperationalError as exc:
+            # psycopg2's OperationalError stringifies to a multi-line traceback
+            # fragment. Compress to one line and surface the knobs the user
+            # actually controls so they don't have to read a stack trace to
+            # figure out what's wrong.
+            host = self._dsn.get("host")
+            port = self._dsn.get("port")
+            raise ConnectionError(
+                f"Could not connect to Postgres at {host}:{port}. "
+                "Check host/port/database in litmus.yml and that "
+                "LITMUS_WAREHOUSE_USER / LITMUS_WAREHOUSE_PASSWORD are set. "
+                f"(underlying error: {str(exc).strip().splitlines()[-1]})"
+            ) from exc
 
     def _ensure_connected(self):
         if self._conn is None:

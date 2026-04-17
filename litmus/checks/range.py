@@ -37,10 +37,15 @@ def check_range(
     if value < rule.min_value or value > rule.max_value:
         status = CheckStatus.FAILED
     else:
-        # Warn if within 10% of either boundary
-        range_size = rule.max_value - rule.min_value
-        margin = range_size * 0.1
-        if value < rule.min_value + margin or value > rule.max_value - margin:
+        # Warn when value is within 10% of a boundary, measured relative to the
+        # boundary's own magnitude — not the range width. A range of 0–10M with
+        # a value of 3,181 shouldn't trip a warning just because the *range* is
+        # wide: the value is nowhere near either boundary.
+        upper_margin = abs(rule.max_value) * 0.1
+        lower_margin = abs(rule.min_value) * 0.1
+        near_upper = upper_margin > 0 and value > rule.max_value - upper_margin
+        near_lower = lower_margin > 0 and value < rule.min_value + lower_margin
+        if near_upper or near_lower:
             status = CheckStatus.WARNING
         else:
             status = CheckStatus.PASSED

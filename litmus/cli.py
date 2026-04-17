@@ -492,7 +492,10 @@ def _default_database(warehouse: str, project_name: str) -> str:
         return "demo.duckdb"
     if warehouse == "sqlite":
         return "demo.sqlite"
-    return project_name.replace("-", "_")
+    # For remote warehouses we have no basis to guess the real database name —
+    # using the project slug tends to be wrong. Leave an obvious TODO so the
+    # user is nudged to fill it in before running checks.
+    return "TODO_your_database_name"
 
 
 @main.command()
@@ -617,15 +620,19 @@ def init(
         for item in created:
             console.print(f"  {item}")
     console.print()
-    if project_name and project_name != ".":
-        console.print(f"[bold]Next:[/bold]  cd {project_name} && litmus check metrics/")
+    if warehouse in ("duckdb", "sqlite"):
+        if project_name and project_name != ".":
+            console.print(
+                f"[bold]Next:[/bold]  cd {project_name} && litmus check metrics/"
+            )
+        else:
+            console.print("[bold]Next:[/bold]  litmus check metrics/")
     else:
-        console.print("[bold]Next:[/bold]  litmus check metrics/")
-    if warehouse not in ("duckdb", "sqlite"):
-        console.print(
-            "[dim]Edit litmus.yml with your connection details and "
-            "`source .env` before running checks.[/dim]"
-        )
+        prefix = f"cd {project_name} && " if project_name and project_name != "." else ""
+        console.print("[bold]Next steps:[/bold]")
+        console.print(f"  1. {prefix}cp .env.example .env")
+        console.print("  2. Fill in credentials in .env and the connection in litmus.yml")
+        console.print("  3. source .env && litmus check metrics/")
     console.print()
 
 

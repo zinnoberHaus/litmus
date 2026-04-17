@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from litmus.checks.freshness import _format_duration
 from litmus.spec.metric_spec import MetricSpec
 
 
@@ -51,7 +52,7 @@ def explain(spec: MetricSpec) -> str:
         if spec.trust.freshness:
             lines.append(
                 f"  - The data is no more than"
-                f" {spec.trust.freshness.max_hours:g} hours old"
+                f" {_format_duration(spec.trust.freshness.max_hours)} old"
             )
         for null_rule in spec.trust.null_rules:
             if null_rule.max_percentage == 0:
@@ -97,7 +98,8 @@ def explain(spec: MetricSpec) -> str:
         lines.append("")
 
     if spec.owner:
-        lines.append(f"This metric is owned by {spec.owner}.")
-        lines.append(f"If something looks wrong, contact: {spec.owner}")
+        lines.append(
+            f"Owned by {spec.owner} — contact them if something looks wrong."
+        )
 
     return "\n".join(lines)
