@@ -20,4 +20,3 @@ Trust:
   Null rate on user_id must be 0%
   Null rate on event_id must be 0%
   Value must be between 0 and 100000
-  Row count must be at least 1

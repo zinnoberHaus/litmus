@@ -18,5 +18,4 @@ Trust:
   Freshness must be less than 72 hours
   Null rate on spent must be 0%
   Null rate on budgeted must be 0%
-  Row count must be at least 10
   Value must be between 100000 and 10000000

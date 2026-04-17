@@ -87,6 +87,10 @@ jobs:
       - name: Seed alignment data
         working-directory: examples/alignment
         run: duckdb alignment_demo.duckdb < seed.sql
+      - name: Verify seed landed
+        working-directory: examples/alignment
+        run: |
+          duckdb alignment_demo.duckdb -c "SELECT COUNT(*) AS orders, SUM(CASE WHEN amount IS NULL THEN 1 ELSE 0 END) AS null_amount FROM orders;"
       - name: Run litmus check (expect intentional red)
         working-directory: examples/alignment
         run: |
@@ -94,6 +98,8 @@ jobs:
           # failure on O-005 (missing USD conversion). We expect exit code 1.
           litmus check metrics/monthly_revenue.metric --format json --output report.json || true
           test -s report.json
+          # Dump the full report so we can diagnose when the assertion below fails.
+          cat report.json
           # Confirm the specific failing rule is present.
           python - <<'PY'
           import json, sys

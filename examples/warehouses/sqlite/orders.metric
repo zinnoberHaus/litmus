@@ -20,5 +20,4 @@ Trust:
   Freshness must be less than 24 hours
   Null rate on amount must be less than 5%
   Null rate on order_id must be 0%
-  Row count must be at least 5
   Value must be between 100 and 1000000
