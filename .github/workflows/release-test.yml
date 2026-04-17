@@ -1,9 +1,10 @@
-name: Release
+name: Release (TestPyPI)
 
 on:
   push:
     tags:
-      - "v*"
+      - "vtest*"
+  workflow_dispatch:
 
 jobs:
   build:
@@ -29,50 +30,28 @@ jobs:
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-test
           path: dist/
           if-no-files-found: error
 
-  publish-pypi:
-    name: Publish to PyPI
+  publish-testpypi:
+    name: Publish to TestPyPI
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: pypi
-      url: https://pypi.org/p/litmus-data
+      name: testpypi
+      url: https://test.pypi.org/p/litmus-data
     permissions:
       id-token: write
     steps:
       - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: dist-test
           path: dist/
 
-      - name: Publish to PyPI via OIDC
+      - name: Publish to TestPyPI via OIDC
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          repository-url: https://test.pypi.org/legacy/
           attestations: true
-
-  github-release:
-    name: Create GitHub Release
-    needs: publish-pypi
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download dist artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          generate_release_notes: true
-          fail_on_unmatched_files: true
