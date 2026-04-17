@@ -48,24 +48,13 @@ jobs:
         working-directory: examples/warehouses/${{ matrix.example }}
         run: ./setup.sh
 
-      - name: Debug workspace
-        working-directory: examples/warehouses/${{ matrix.example }}
-        run: |
-          echo "cwd=$(pwd)"
-          ls -la
-          echo "--- litmus.yml ---"
-          cat litmus.yml
-
       - name: Run litmus check
         working-directory: examples/warehouses/${{ matrix.example }}
         run: |
           # Each example's setup.sh prints the litmus command to run.
           # They all follow the pattern: litmus check <name>.metric
           metric=$(ls *.metric | head -1)
-          # Pass -c explicitly: load_config otherwise looks for litmus.yml
-          # at Path("litmus.yml") relative to cwd, which can be surprising
-          # depending on how the runner chained into the step.
-          litmus check "$metric" -c ./litmus.yml --format json --output report.json
+          litmus check "$metric" --format json --output report.json
 
       - name: Upload report
         if: always()
