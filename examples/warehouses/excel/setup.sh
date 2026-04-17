@@ -29,7 +29,10 @@ conn.execute(
         -- without manually specifying a value column.
         CAST(spent AS DOUBLE)    AS amount,
         CAST(as_of AS DATE)      AS as_of,
-        CURRENT_TIMESTAMP        AS updated_at
+        -- Cast to TIMESTAMP (no time zone) so DuckDB's Python bindings
+        -- don't try to convert TIMESTAMPTZ via pytz (which isn't a
+        -- guaranteed runtime dep).
+        CAST(CURRENT_TIMESTAMP AS TIMESTAMP) AS updated_at
       FROM st_read('budget.xlsx', layer='Budget')
     """
 )

@@ -22,7 +22,10 @@ conn.execute(
         status,
         amount,
         order_date,
-        CURRENT_TIMESTAMP AS updated_at
+        -- Cast to TIMESTAMP (no time zone) so DuckDB's Python bindings
+        -- don't try to convert TIMESTAMPTZ via pytz (which isn't a
+        -- guaranteed runtime dep).
+        CAST(CURRENT_TIMESTAMP AS TIMESTAMP) AS updated_at
       FROM read_csv_auto('sales.csv')
     """
 )
