@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format check clean build
+.PHONY: install dev test lint format check clean build verify-examples
 
 install:
 	pip install -e .
@@ -21,6 +21,11 @@ format:
 	ruff check --fix litmus/ tests/
 
 check: lint test
+
+# Run the Examples smoke test locally (same as .github/workflows/examples.yml).
+# Handy to gate a commit before pushing.
+verify-examples:
+	@./scripts/verify-examples.sh
 
 clean:
 	rm -rf build/ dist/ *.egg-info .pytest_cache .mypy_cache .ruff_cache

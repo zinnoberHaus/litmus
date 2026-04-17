@@ -241,37 +241,11 @@ def explain(file: str):
 
 # ── litmus init ─────────────────────────────────────────────────────
 
-
-_EXAMPLE_CONFIG = """\
-# litmus.yml
-version: 1
-
-# Where your .metric files live
-metrics_dir: metrics/
-
-# Warehouse connection
-warehouse:
-  type: duckdb  # duckdb | postgres | snowflake | bigquery
-  database: ":memory:"
-  # For real warehouses, set credentials via env vars:
-  # LITMUS_WAREHOUSE_USER
-  # LITMUS_WAREHOUSE_PASSWORD
-
-# Check defaults (can be overridden per metric)
-defaults:
-  freshness: 24 hours
-  null_rate: 5%
-  volume_change: 25%
-
-# Output
-reporting:
-  format: console  # console | json | html | markdown
-  colors: true
-"""
+_SUPPORTED_WAREHOUSES = ("duckdb", "sqlite", "postgres", "snowflake", "bigquery")
 
 _EXAMPLE_METRIC = """\
 Metric: Example Revenue
-Description: Total revenue from completed orders in the current calendar month
+Description: Total revenue from completed orders, computed from the seeded demo data.
 Owner: data-team
 Tags: finance, example
 
@@ -279,7 +253,7 @@ Source: orders
 
 Given all records from orders table
   And status is "completed"
-  And order_date is within current calendar month
+  And amount is present
 
 When we calculate
   Then sum the amount column
@@ -294,38 +268,364 @@ Trust:
   Value must be between 0 and 10000000
 """
 
+_GITIGNORE = """\
+# Local credentials — never commit
+.env
+
+# Local history / cache
+.litmus/
+
+# Local demo DB files (regenerate via the project's seed script if needed)
+*.duckdb
+*.sqlite
+
+# Generated reports
+litmus-share/
+report.html
+report.json
+"""
+
+_ENV_EXAMPLES = {
+    "duckdb": "# DuckDB runs locally — no credentials needed.\n",
+    "sqlite": "# SQLite runs locally — no credentials needed.\n",
+    "postgres": (
+        "# Fill these in, then `source .env` before running litmus.\n"
+        "export LITMUS_WAREHOUSE_USER=your_user\n"
+        "export LITMUS_WAREHOUSE_PASSWORD=your_password\n"
+    ),
+    "snowflake": (
+        "# Fill these in, then `source .env` before running litmus.\n"
+        "export LITMUS_WAREHOUSE_USER=your_user\n"
+        "export LITMUS_WAREHOUSE_PASSWORD=your_password\n"
+    ),
+    "bigquery": (
+        "# BigQuery uses application-default credentials:\n"
+        "#   gcloud auth application-default login\n"
+        "# No user/password env vars needed.\n"
+    ),
+}
+
+
+def _render_warehouse_block(warehouse: str, database: str) -> str:
+    if warehouse in ("duckdb", "sqlite"):
+        return (
+            f"warehouse:\n"
+            f"  type: {warehouse}\n"
+            f'  database: "{database}"\n'
+        )
+    if warehouse == "postgres":
+        return (
+            "warehouse:\n"
+            "  type: postgres\n"
+            "  host: localhost\n"
+            "  port: 5432\n"
+            f"  database: {database}\n"
+            "  schema: public\n"
+            "  # Credentials come from LITMUS_WAREHOUSE_USER / LITMUS_WAREHOUSE_PASSWORD\n"
+        )
+    if warehouse == "snowflake":
+        return (
+            "warehouse:\n"
+            "  type: snowflake\n"
+            "  account: your_account\n"
+            f"  database: {database}\n"
+            "  schema: PUBLIC\n"
+            "  warehouse: COMPUTE_WH\n"
+            "  role: ANALYST\n"
+            "  # Credentials come from LITMUS_WAREHOUSE_USER / LITMUS_WAREHOUSE_PASSWORD\n"
+        )
+    if warehouse == "bigquery":
+        return (
+            "warehouse:\n"
+            "  type: bigquery\n"
+            f"  database: {database}  # GCP project ID\n"
+            "  schema: your_dataset\n"
+            "  # Auth via: gcloud auth application-default login\n"
+        )
+    raise click.BadParameter(f"Unknown warehouse type: {warehouse}")
+
+
+def _render_config(warehouse: str, database: str) -> str:
+    return (
+        "# litmus.yml\n"
+        "version: 1\n"
+        "\n"
+        "# Where your .metric files live\n"
+        "metrics_dir: metrics/\n"
+        "\n"
+        "# Warehouse connection\n"
+        f"{_render_warehouse_block(warehouse, database)}"
+        "\n"
+        "# Check defaults (overridable per metric)\n"
+        "defaults:\n"
+        "  freshness: 24 hours\n"
+        "  null_rate: 5%\n"
+        "  volume_change: 25%\n"
+        "\n"
+        "# Output\n"
+        "reporting:\n"
+        "  format: console  # console | json | html | markdown\n"
+        "  colors: true\n"
+    )
+
+
+def _render_readme(project_name: str, warehouse: str, database: str) -> str:
+    run_line = "litmus check metrics/"
+    seed_line = ""
+    if warehouse in ("duckdb", "sqlite"):
+        seed_line = (
+            f"A demo `{database}` file was seeded with an `orders` table so "
+            "`litmus check` works right away.\n\n"
+        )
+    else:
+        seed_line = (
+            f"Point `{database}` at a real `orders` table (or edit "
+            "`metrics/example.metric` to match your schema) before running "
+            "checks.\n\n"
+        )
+
+    return (
+        f"# {project_name}\n\n"
+        "A Litmus project — BDD-style metric definitions with built-in "
+        "data trust checks.\n\n"
+        "## Quickstart\n\n"
+        f"{seed_line}"
+        "```bash\n"
+        f"{run_line}\n"
+        "```\n\n"
+        "## Layout\n\n"
+        "- `litmus.yml` — warehouse connection + defaults\n"
+        "- `metrics/` — one `.metric` file per metric\n"
+        "- `.env.example` — template for credentials (copy to `.env`, "
+        "then `source .env`)\n\n"
+        "## Common commands\n\n"
+        "```bash\n"
+        "litmus check metrics/                  # run trust checks\n"
+        "litmus explain metrics/example.metric  # plain-English doc\n"
+        "litmus report metrics/ -f html -o report.html\n"
+        "litmus share metrics/                  # self-contained dashboard\n"
+        "```\n"
+    )
+
+
+def _seed_duckdb(db_path: Path) -> None:
+    """Seed a small orders table so `litmus check` works on first run."""
+    import duckdb
+
+    conn = duckdb.connect(str(db_path))
+    try:
+        conn.execute(
+            """
+            CREATE TABLE orders (
+                order_id    BIGINT PRIMARY KEY,
+                customer_id BIGINT NOT NULL,
+                status      VARCHAR NOT NULL,
+                amount      DOUBLE,
+                order_date  DATE NOT NULL,
+                updated_at  TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO orders VALUES
+              (1, 101, 'completed', 120.00, DATE '2026-04-10',
+               CAST(CURRENT_TIMESTAMP AS TIMESTAMP)),
+              (2, 102, 'completed', 450.50, DATE '2026-04-11',
+               CAST(CURRENT_TIMESTAMP AS TIMESTAMP)),
+              (3, 103, 'pending',   80.00,  DATE '2026-04-11',
+               CAST(CURRENT_TIMESTAMP AS TIMESTAMP)),
+              (4, 104, 'completed', 1200.00, DATE '2026-04-12',
+               CAST(CURRENT_TIMESTAMP AS TIMESTAMP)),
+              (5, 105, 'completed', 320.25, DATE '2026-04-13',
+               CAST(CURRENT_TIMESTAMP AS TIMESTAMP)),
+              (6, 106, 'completed', 75.99,  DATE '2026-04-14',
+               CAST(CURRENT_TIMESTAMP AS TIMESTAMP)),
+              (7, 107, 'completed', 890.00, DATE '2026-04-15',
+               CAST(CURRENT_TIMESTAMP AS TIMESTAMP)),
+              (8, 108, 'completed', 44.50,  DATE '2026-04-16',
+               CAST(CURRENT_TIMESTAMP AS TIMESTAMP))
+            """
+        )
+    finally:
+        conn.close()
+
+
+def _seed_sqlite(db_path: Path) -> None:
+    import sqlite3
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            """
+            CREATE TABLE orders (
+                order_id    INTEGER PRIMARY KEY,
+                customer_id INTEGER NOT NULL,
+                status      TEXT NOT NULL,
+                amount      REAL,
+                order_date  TEXT NOT NULL,
+                updated_at  TEXT DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO orders (order_id, customer_id, status, amount, order_date) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [
+                (1, 101, "completed", 120.00, "2026-04-10"),
+                (2, 102, "completed", 450.50, "2026-04-11"),
+                (3, 103, "pending", 80.00, "2026-04-11"),
+                (4, 104, "completed", 1200.00, "2026-04-12"),
+                (5, 105, "completed", 320.25, "2026-04-13"),
+                (6, 106, "completed", 75.99, "2026-04-14"),
+                (7, 107, "completed", 890.00, "2026-04-15"),
+                (8, 108, "completed", 44.50, "2026-04-16"),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _default_database(warehouse: str, project_name: str) -> str:
+    if warehouse == "duckdb":
+        return "demo.duckdb"
+    if warehouse == "sqlite":
+        return "demo.sqlite"
+    return project_name.replace("-", "_")
+
 
 @main.command()
-def init():
-    """Initialize a new litmus project with example files."""
-    config_path = Path("litmus.yml")
-    metrics_dir = Path("metrics")
+@click.argument("project_name", required=False)
+@click.option(
+    "--warehouse",
+    type=click.Choice(_SUPPORTED_WAREHOUSES),
+    default=None,
+    help="Warehouse type. Prompts if omitted and stdin is a TTY; defaults to duckdb otherwise.",
+)
+@click.option(
+    "--database",
+    default=None,
+    help="Database name (postgres/snowflake/bigquery) or file path (duckdb/sqlite).",
+)
+@click.option(
+    "--yes", "-y", "skip_prompts", is_flag=True,
+    help="Skip interactive prompts and use defaults.",
+)
+@click.option(
+    "--force", is_flag=True,
+    help="Overwrite existing files in the target directory.",
+)
+def init(
+    project_name: str | None,
+    warehouse: str | None,
+    database: str | None,
+    skip_prompts: bool,
+    force: bool,
+):
+    """Initialize a new litmus project.
 
-    created = []
-
-    if not config_path.exists():
-        config_path.write_text(_EXAMPLE_CONFIG)
-        created.append("litmus.yml          — configuration file")
+    \b
+    Examples:
+      litmus init                        # scaffold into the current directory
+      litmus init my_metrics             # create ./my_metrics/ and scaffold into it
+      litmus init my_metrics --warehouse postgres --yes
+    """
+    # Resolve target directory.
+    if project_name and project_name != ".":
+        target = Path(project_name)
+        if target.exists() and any(target.iterdir()) and not force:
+            console.print(
+                f"[red]Directory {target}/ already exists and is not empty. "
+                "Re-run with --force to scaffold anyway.[/red]"
+            )
+            sys.exit(1)
+        target.mkdir(parents=True, exist_ok=True)
+        display_name = project_name
     else:
-        console.print("[yellow]litmus.yml already exists, skipping.[/yellow]")
+        target = Path(".")
+        display_name = Path.cwd().name or "litmus-project"
 
-    metrics_dir.mkdir(exist_ok=True)
-    created.append("metrics/            — directory for .metric files")
+    # Resolve warehouse type. Prompt only if interactive and no flag given.
+    interactive = sys.stdin.isatty() and not skip_prompts
+    if warehouse is None:
+        if interactive:
+            warehouse = click.prompt(
+                "Warehouse type",
+                type=click.Choice(_SUPPORTED_WAREHOUSES),
+                default="duckdb",
+            )
+        else:
+            warehouse = "duckdb"
 
-    example_path = metrics_dir / "example.metric"
-    if not example_path.exists():
-        example_path.write_text(_EXAMPLE_METRIC)
-        created.append("metrics/example.metric — example metric spec")
-    else:
-        console.print("[yellow]metrics/example.metric already exists, skipping.[/yellow]")
+    # Resolve database name/path.
+    default_db = _default_database(warehouse, display_name)
+    if database is None:
+        if interactive:
+            hint = " (file path)" if warehouse in ("duckdb", "sqlite") else ""
+            database = click.prompt(
+                f"Database{hint}",
+                default=default_db,
+            )
+        else:
+            database = default_db
+
+    assert warehouse is not None and database is not None
+
+    # Write project files.
+    created: list[str] = []
+
+    def _write(relpath: str, content: str, label: str) -> None:
+        path = target / relpath
+        if path.exists() and not force:
+            console.print(f"[yellow]{relpath} already exists, skipping.[/yellow]")
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        created.append(f"{relpath:32s} — {label}")
+
+    _write("litmus.yml", _render_config(warehouse, database), "warehouse config")
+    (target / "metrics").mkdir(exist_ok=True)
+    _write("metrics/example.metric", _EXAMPLE_METRIC, "starter metric")
+    _write(".env.example", _ENV_EXAMPLES[warehouse], "credential template")
+    _write(".gitignore", _GITIGNORE, "ignore rules")
+    _write("README.md", _render_readme(display_name, warehouse, database), "project readme")
+
+    # Seed a demo DB for local warehouses so first `check` works.
+    if warehouse == "duckdb":
+        db_file = target / database
+        if db_file.exists() and not force:
+            console.print(f"[yellow]{database} already exists, skipping seed.[/yellow]")
+        else:
+            if db_file.exists():
+                db_file.unlink()
+            _seed_duckdb(db_file)
+            created.append(f"{database:32s} — seeded demo data (8 orders)")
+    elif warehouse == "sqlite":
+        db_file = target / database
+        if db_file.exists() and not force:
+            console.print(f"[yellow]{database} already exists, skipping seed.[/yellow]")
+        else:
+            if db_file.exists():
+                db_file.unlink()
+            _seed_sqlite(db_file)
+            created.append(f"{database:32s} — seeded demo data (8 orders)")
 
     console.print()
-    console.print("[bold]Created:[/bold]")
-    for item in created:
-        console.print(f"  {item}")
+    if created:
+        console.print("[bold green]Created:[/bold green]")
+        for item in created:
+            console.print(f"  {item}")
     console.print()
-    console.print("Edit litmus.yml to configure your warehouse connection.")
-    console.print("Run [bold]litmus check metrics/[/bold] to validate your metrics.")
+    if project_name and project_name != ".":
+        console.print(f"[bold]Next:[/bold]  cd {project_name} && litmus check metrics/")
+    else:
+        console.print("[bold]Next:[/bold]  litmus check metrics/")
+    if warehouse not in ("duckdb", "sqlite"):
+        console.print(
+            "[dim]Edit litmus.yml with your connection details and "
+            "`source .env` before running checks.[/dim]"
+        )
     console.print()
 
 

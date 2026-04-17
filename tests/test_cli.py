@@ -108,23 +108,73 @@ class TestParseCommand:
 
 
 class TestInitCommand:
-    def test_init_creates_files(self, runner: CliRunner, tmp_path: Path):
+    def test_init_cwd_mode(self, runner: CliRunner, tmp_path: Path):
+        """`litmus init` with no arg scaffolds into the current directory."""
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(main, ["init"])
-            assert result.exit_code == 0
+            result = runner.invoke(main, ["init", "--yes"])
+            assert result.exit_code == 0, result.output
             assert Path("litmus.yml").exists()
             assert Path("metrics").is_dir()
             assert Path("metrics/example.metric").exists()
+            assert Path(".env.example").exists()
+            assert Path(".gitignore").exists()
+            assert Path("README.md").exists()
+            # Default warehouse is duckdb, which seeds a demo file.
+            assert Path("demo.duckdb").exists()
 
     def test_init_idempotent(self, runner: CliRunner, tmp_path: Path):
+        """Re-running in the same dir without --force is a no-op warning."""
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            # Run init twice
-            runner.invoke(main, ["init"])
-            result = runner.invoke(main, ["init"])
+            runner.invoke(main, ["init", "--yes"])
+            result = runner.invoke(main, ["init", "--yes"])
             assert result.exit_code == 0
-            # Files should still exist
+            assert "already exists" in result.output
             assert Path("litmus.yml").exists()
             assert Path("metrics/example.metric").exists()
+
+    def test_init_with_project_name(self, runner: CliRunner, tmp_path: Path):
+        """`litmus init <name>` creates a subdirectory and scaffolds into it."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(main, ["init", "myproj", "--yes"])
+            assert result.exit_code == 0, result.output
+            assert Path("myproj/litmus.yml").exists()
+            assert Path("myproj/metrics/example.metric").exists()
+            assert Path("myproj/demo.duckdb").exists()
+            # Nothing leaked into cwd.
+            assert not Path("litmus.yml").exists()
+
+    def test_init_refuses_nonempty_directory(self, runner: CliRunner, tmp_path: Path):
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            Path("myproj").mkdir()
+            (Path("myproj") / "existing.txt").write_text("hi")
+            result = runner.invoke(main, ["init", "myproj", "--yes"])
+            assert result.exit_code != 0
+            assert "already exists" in result.output
+
+    def test_init_postgres_skips_seed(self, runner: CliRunner, tmp_path: Path):
+        """Non-local warehouses scaffold config but no demo DB file."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                main,
+                ["init", "pgproj", "--warehouse", "postgres",
+                 "--database", "analytics", "--yes"],
+            )
+            assert result.exit_code == 0, result.output
+            cfg = Path("pgproj/litmus.yml").read_text()
+            assert "type: postgres" in cfg
+            assert "database: analytics" in cfg
+            # No seeded database file.
+            assert not any(p.suffix in (".duckdb", ".sqlite") for p in Path("pgproj").iterdir())
+
+    def test_init_sqlite_seeds_demo(self, runner: CliRunner, tmp_path: Path):
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                main, ["init", "sqlproj", "--warehouse", "sqlite", "--yes"]
+            )
+            assert result.exit_code == 0, result.output
+            assert Path("sqlproj/demo.sqlite").exists()
+            cfg = Path("sqlproj/litmus.yml").read_text()
+            assert "type: sqlite" in cfg
 
 
 # ---------------------------------------------------------------------------
