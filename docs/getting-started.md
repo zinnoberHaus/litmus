@@ -252,7 +252,7 @@ Every Litmus badge is a live link back to the metric's detail page on the catalo
 
 ### Embed a badge yourself
 
-If you run Litmus and want to embed a badge somewhere, see [`docs/badges.md`](badges.md) — dedicated guides for Notion, Slack, Confluence, README, and GitHub Pages. _(Ships in v0.3.)_
+If you run Litmus and want to embed a badge somewhere, see [`docs/badges.md`](badges.md) — dedicated guides for Notion, Slack, Confluence, README, email, and GitHub Pages, plus the shields.io-style `?size=`/`?label=`/`?color=`/`?style=` query-param reference.
 
 ---
 

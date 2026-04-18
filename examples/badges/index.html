@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Litmus badge gallery — visual QA</title>
+<meta name="description" content="Visual QA grid for every Litmus badge variant: size, status, style, customisation.">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #111827;
+    background: linear-gradient(180deg, #fafafa 0%, #f3f4f6 100%);
+    margin: 0;
+    padding: 3rem 2rem 5rem;
+  }
+  header {
+    max-width: 1100px;
+    margin: 0 auto 3rem;
+  }
+  h1 { margin: 0 0 .5rem; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; }
+  header p { color: #4b5563; margin: 0 0 .25rem; max-width: 60ch; }
+  main { max-width: 1100px; margin: 0 auto; }
+  section {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 1.5rem 1.75rem 2rem;
+    margin-bottom: 1.75rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  }
+  h2 { margin: 0 0 1.25rem; font-size: 1rem; font-weight: 600; color: #374151; }
+  h2 code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: .875rem; color: #4f46e5; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+  .cell {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+  }
+  .label {
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    font-weight: 600;
+  }
+  .label code {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: .8rem;
+    color: #1f2937;
+    background: #f3f4f6;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .desc {
+    font-size: .8rem;
+    color: #6b7280;
+  }
+  .badge-wrap {
+    padding: .75rem 1rem;
+    background: #fafafa;
+    border: 1px dashed #e5e7eb;
+    border-radius: 10px;
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
+  }
+  .badge-wrap svg { max-width: 100%; }
+  footer {
+    max-width: 1100px;
+    margin: 2rem auto 0;
+    font-size: .8rem;
+    color: #6b7280;
+    text-align: center;
+  }
+  footer a { color: #4f46e5; text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Litmus badge gallery — visual QA</h1>
+    <p>Every size × status combination, rendered by the real server renderer
+       (<code>litmus_api/embed_svg.py</code>). Self-contained; open in any browser.</p>
+    <p>If something here looks off, the Notion embed, Slack unfurl card, and
+       README rendering will look off too. Treat this page as the test harness.</p>
+  </header>
+
+  <main>
+  <section>
+    <h2>size=<code>small</code></h2>
+    <div class="grid">
+      <div class="cell">
+        <div class="label">passed</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="195" height="20" viewBox="0 0 195 20" role="img" aria-label="litmus trust badge for Monthly Revenue: Trusted"><a xlink:href="https://litmus.example.com/metrics/monthly_revenue" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Monthly Revenue — Trusted. https://litmus.example.com/metrics/monthly_revenue</desc>
+  <style>
+    .name { font: 600 10px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 10px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #16a34a; }
+    .brand { font: 500 9px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="194" height="19" rx="4" ry="4" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="4" y="4.0" width="187" height="12" rx="2" ry="2" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <circle cx="11" cy="10.0" r="3" fill="#16a34a"/>
+  <text x="20" y="13.3" class="name">Monthly Revenue</text>
+  <text x="109" y="13.3" class="label">Trusted</text>
+  <text x="187" y="13.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+        <div class="desc">All trust checks passed.</div>
+      </div>
+      <div class="cell">
+        <div class="label">warning</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="190" height="20" viewBox="0 0 190 20" role="img" aria-label="litmus trust badge for Conversion Rate: Review"><a xlink:href="https://litmus.example.com/metrics/conversion_rate" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Conversion Rate — Review. https://litmus.example.com/metrics/conversion_rate</desc>
+  <style>
+    .name { font: 600 10px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 10px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #ca8a04; }
+    .brand { font: 500 9px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="189" height="19" rx="4" ry="4" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="4" y="4.0" width="182" height="12" rx="2" ry="2" fill="#fefce8" stroke="#fde68a"/>
+  <circle cx="11" cy="10.0" r="3" fill="#ca8a04"/>
+  <text x="20" y="13.3" class="name">Conversion Rate</text>
+  <text x="109" y="13.3" class="label">Review</text>
+  <text x="182" y="13.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+        <div class="desc">At least one check in the warning band.</div>
+      </div>
+      <div class="cell">
+        <div class="label">failed</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="163" height="20" viewBox="0 0 163 20" role="img" aria-label="litmus trust badge for Churn Rate: Broken"><a xlink:href="https://litmus.example.com/metrics/churn_rate" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Churn Rate — Broken. https://litmus.example.com/metrics/churn_rate</desc>
+  <style>
+    .name { font: 600 10px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 10px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #dc2626; }
+    .brand { font: 500 9px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="162" height="19" rx="4" ry="4" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="4" y="4.0" width="155" height="12" rx="2" ry="2" fill="#fef2f2" stroke="#fecaca"/>
+  <circle cx="11" cy="10.0" r="3" fill="#dc2626"/>
+  <text x="20" y="13.3" class="name">Churn Rate</text>
+  <text x="82" y="13.3" class="label">Broken</text>
+  <text x="155" y="13.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+        <div class="desc">One or more checks failed.</div>
+      </div>
+      <div class="cell">
+        <div class="label">unknown</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="168" height="20" viewBox="0 0 168 20" role="img" aria-label="litmus trust badge for New Metric: Unknown"><a xlink:href="https://litmus.example.com/metrics/new_metric" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>New Metric — Unknown. https://litmus.example.com/metrics/new_metric</desc>
+  <style>
+    .name { font: 600 10px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 10px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #6b7280; }
+    .brand { font: 500 9px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="167" height="19" rx="4" ry="4" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="4" y="4.0" width="160" height="12" rx="2" ry="2" fill="#f9fafb" stroke="#e5e7eb"/>
+  <circle cx="11" cy="10.0" r="3" fill="#6b7280"/>
+  <text x="20" y="13.3" class="name">New Metric</text>
+  <text x="82" y="13.3" class="label">Unknown</text>
+  <text x="160" y="13.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+        <div class="desc">No runs yet, or warehouse unreachable.</div>
+      </div>
+    </div>
+  </section>
+  <section>
+    <h2>size=<code>medium</code></h2>
+    <div class="grid">
+      <div class="cell">
+        <div class="label">passed</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="297" height="36" viewBox="0 0 297 36" role="img" aria-label="litmus trust badge for Monthly Revenue: Trusted · 95"><a xlink:href="https://litmus.example.com/metrics/monthly_revenue" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Monthly Revenue — Trusted · 95. https://litmus.example.com/metrics/monthly_revenue</desc>
+  <style>
+    .name { font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 12px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #16a34a; }
+    .brand { font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="296" height="35" rx="8" ry="8" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="8" y="4.0" width="281" height="28" rx="6" ry="6" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <circle cx="16" cy="18.0" r="4" fill="#16a34a"/>
+  <text x="26" y="22.3" class="name">Monthly Revenue</text>
+  <text x="146" y="22.3" class="label">Trusted · 95</text>
+  <text x="285" y="22.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+        <div class="desc">All trust checks passed.</div>
+      </div>
+      <div class="cell">
+        <div class="label">warning</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="275" height="36" viewBox="0 0 275 36" role="img" aria-label="litmus trust badge for Conversion Rate: Review"><a xlink:href="https://litmus.example.com/metrics/conversion_rate" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Conversion Rate — Review. https://litmus.example.com/metrics/conversion_rate</desc>
+  <style>
+    .name { font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 12px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #ca8a04; }
+    .brand { font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="274" height="35" rx="8" ry="8" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="8" y="4.0" width="259" height="28" rx="6" ry="6" fill="#fefce8" stroke="#fde68a"/>
+  <circle cx="16" cy="18.0" r="4" fill="#ca8a04"/>
+  <text x="26" y="22.3" class="name">Conversion Rate</text>
+  <text x="146" y="22.3" class="label">Review</text>
+  <text x="263" y="22.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+        <div class="desc">At least one check in the warning band.</div>
+      </div>
+      <div class="cell">
+        <div class="label">failed</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="275" height="36" viewBox="0 0 275 36" role="img" aria-label="litmus trust badge for Churn Rate: Broken"><a xlink:href="https://litmus.example.com/metrics/churn_rate" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Churn Rate — Broken. https://litmus.example.com/metrics/churn_rate</desc>
+  <style>
+    .name { font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 12px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #dc2626; }
+    .brand { font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="274" height="35" rx="8" ry="8" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="8" y="4.0" width="259" height="28" rx="6" ry="6" fill="#fef2f2" stroke="#fecaca"/>
+  <circle cx="16" cy="18.0" r="4" fill="#dc2626"/>
+  <text x="26" y="22.3" class="name">Churn Rate</text>
+  <text x="109" y="22.3" class="label">Broken</text>
+  <text x="263" y="22.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+        <div class="desc">One or more checks failed.</div>
+      </div>
+      <div class="cell">
+        <div class="label">unknown</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="275" height="36" viewBox="0 0 275 36" role="img" aria-label="litmus trust badge for New Metric: Unknown"><a xlink:href="https://litmus.example.com/metrics/new_metric" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>New Metric — Unknown. https://litmus.example.com/metrics/new_metric</desc>
+  <style>
+    .name { font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 12px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #6b7280; }
+    .brand { font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="274" height="35" rx="8" ry="8" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="8" y="4.0" width="259" height="28" rx="6" ry="6" fill="#f9fafb" stroke="#e5e7eb"/>
+  <circle cx="16" cy="18.0" r="4" fill="#6b7280"/>
+  <text x="26" y="22.3" class="name">New Metric</text>
+  <text x="109" y="22.3" class="label">Unknown</text>
+  <text x="263" y="22.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+        <div class="desc">No runs yet, or warehouse unreachable.</div>
+      </div>
+    </div>
+  </section>
+  <section>
+    <h2>size=<code>large</code></h2>
+    <div class="grid">
+      <div class="cell">
+        <div class="label">passed</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="423" height="60" viewBox="0 0 423 60" role="img" aria-label="litmus trust badge for Monthly Revenue: Trusted · 95"><a xlink:href="https://litmus.example.com/metrics/monthly_revenue" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Monthly Revenue — Trusted · 95. https://litmus.example.com/metrics/monthly_revenue</desc>
+  <style>
+    .name { font: 600 20px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 16px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #16a34a; }
+    .brand { font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="422" height="59" rx="12" ry="12" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="14" y="4.0" width="395" height="52" rx="10" ry="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <circle cx="24" cy="30.0" r="6" fill="#16a34a"/>
+  <text x="36" y="36.7" class="name">Monthly Revenue</text>
+  <text x="201" y="36.7" class="label">Trusted · 95</text>
+  <text x="405" y="36.7" text-anchor="end" class="brand">⚗ litmus</text>
+</a></svg></div>
+        <div class="desc">All trust checks passed.</div>
+      </div>
+      <div class="cell">
+        <div class="label">warning</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="400" height="60" viewBox="0 0 400 60" role="img" aria-label="litmus trust badge for Conversion Rate: Review"><a xlink:href="https://litmus.example.com/metrics/conversion_rate" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Conversion Rate — Review. https://litmus.example.com/metrics/conversion_rate</desc>
+  <style>
+    .name { font: 600 20px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 16px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #ca8a04; }
+    .brand { font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="399" height="59" rx="12" ry="12" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="14" y="4.0" width="372" height="52" rx="10" ry="10" fill="#fefce8" stroke="#fde68a"/>
+  <circle cx="24" cy="30.0" r="6" fill="#ca8a04"/>
+  <text x="36" y="36.7" class="name">Conversion Rate</text>
+  <text x="201" y="36.7" class="label">Review</text>
+  <text x="382" y="36.7" text-anchor="end" class="brand">⚗ litmus</text>
+</a></svg></div>
+        <div class="desc">At least one check in the warning band.</div>
+      </div>
+      <div class="cell">
+        <div class="label">failed</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="400" height="60" viewBox="0 0 400 60" role="img" aria-label="litmus trust badge for Churn Rate: Broken"><a xlink:href="https://litmus.example.com/metrics/churn_rate" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Churn Rate — Broken. https://litmus.example.com/metrics/churn_rate</desc>
+  <style>
+    .name { font: 600 20px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 16px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #dc2626; }
+    .brand { font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="399" height="59" rx="12" ry="12" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="14" y="4.0" width="372" height="52" rx="10" ry="10" fill="#fef2f2" stroke="#fecaca"/>
+  <circle cx="24" cy="30.0" r="6" fill="#dc2626"/>
+  <text x="36" y="36.7" class="name">Churn Rate</text>
+  <text x="149" y="36.7" class="label">Broken</text>
+  <text x="382" y="36.7" text-anchor="end" class="brand">⚗ litmus</text>
+</a></svg></div>
+        <div class="desc">One or more checks failed.</div>
+      </div>
+      <div class="cell">
+        <div class="label">unknown</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="400" height="60" viewBox="0 0 400 60" role="img" aria-label="litmus trust badge for New Metric: Unknown"><a xlink:href="https://litmus.example.com/metrics/new_metric" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>New Metric — Unknown. https://litmus.example.com/metrics/new_metric</desc>
+  <style>
+    .name { font: 600 20px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 16px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #6b7280; }
+    .brand { font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="399" height="59" rx="12" ry="12" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="14" y="4.0" width="372" height="52" rx="10" ry="10" fill="#f9fafb" stroke="#e5e7eb"/>
+  <circle cx="24" cy="30.0" r="6" fill="#6b7280"/>
+  <text x="36" y="36.7" class="name">New Metric</text>
+  <text x="149" y="36.7" class="label">Unknown</text>
+  <text x="382" y="36.7" text-anchor="end" class="brand">⚗ litmus</text>
+</a></svg></div>
+        <div class="desc">No runs yet, or warehouse unreachable.</div>
+      </div>
+    </div>
+  </section>
+
+    <section>
+      <h2>Style variants</h2>
+      <div class="grid">
+      <div class="cell">
+        <div class="label">style=flat</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="275" height="36" viewBox="0 0 275 36" role="img" aria-label="litmus trust badge for Revenue: Trusted · 95"><a xlink:href="https://litmus.example.com/metrics/revenue" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Revenue — Trusted · 95. https://litmus.example.com/metrics/revenue</desc>
+  <style>
+    .name { font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 12px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #16a34a; }
+    .brand { font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="274" height="35" rx="8" ry="8" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="8" y="4.0" width="259" height="28" rx="6" ry="6" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <circle cx="16" cy="18.0" r="4" fill="#16a34a"/>
+  <text x="26" y="22.3" class="name">Revenue</text>
+  <text x="86" y="22.3" class="label">Trusted · 95</text>
+  <text x="263" y="22.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+      </div>
+      <div class="cell">
+        <div class="label">style=for-the-badge</div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="150" height="36" viewBox="0 0 150 36" role="img" aria-label="litmus trust badge for Revenue: Trusted"><a xlink:href="https://litmus.example.com/metrics/revenue" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Revenue — Trusted. https://litmus.example.com/metrics/revenue</desc>
+  <rect width="70" height="36" fill="#1f2937"/>
+  <rect x="70" width="80" height="36" fill="#16a34a"/>
+  <g fill="#ffffff" text-anchor="middle" font-family='ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' font-size="11" font-weight="700" letter-spacing="1">
+    <text x="35.0" y="21.7">LITMUS</text>
+    <text x="110.0" y="21.7">TRUSTED</text>
+  </g>
+</a></svg></div>
+      </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Customisation (<code>?label=</code>, <code>?color=</code>)</h2>
+      <div class="grid">
+      <div class="cell">
+        <div class="label"><code>?label=MRR</code></div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="275" height="36" viewBox="0 0 275 36" role="img" aria-label="litmus trust badge for MRR: Trusted · 95"><a xlink:href="https://litmus.example.com/metrics/monthly_revenue" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>MRR — Trusted · 95. https://litmus.example.com/metrics/monthly_revenue</desc>
+  <style>
+    .name { font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 12px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #16a34a; }
+    .brand { font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="274" height="35" rx="8" ry="8" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="8" y="4.0" width="259" height="28" rx="6" ry="6" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <circle cx="16" cy="18.0" r="4" fill="#16a34a"/>
+  <text x="26" y="22.3" class="name">MRR</text>
+  <text x="56" y="22.3" class="label">Trusted · 95</text>
+  <text x="263" y="22.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+      </div>
+      <div class="cell">
+        <div class="label"><code>?color=4c1d95 (custom purple)</code></div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="297" height="36" viewBox="0 0 297 36" role="img" aria-label="litmus trust badge for Monthly Revenue: Trusted · 95"><a xlink:href="https://litmus.example.com/metrics/monthly_revenue" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Monthly Revenue — Trusted · 95. https://litmus.example.com/metrics/monthly_revenue</desc>
+  <style>
+    .name { font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 12px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #4c1d95; }
+    .brand { font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="296" height="35" rx="8" ry="8" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="8" y="4.0" width="281" height="28" rx="6" ry="6" fill="#ffffff" stroke="#e5e7eb"/>
+  <circle cx="16" cy="18.0" r="4" fill="#4c1d95"/>
+  <text x="26" y="22.3" class="name">Monthly Revenue</text>
+  <text x="146" y="22.3" class="label">Trusted · 95</text>
+  <text x="285" y="22.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+      </div>
+      <div class="cell">
+        <div class="label"><code>?color=ff6b6b (custom coral)</code></div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="297" height="36" viewBox="0 0 297 36" role="img" aria-label="litmus trust badge for Monthly Revenue: Trusted · 95"><a xlink:href="https://litmus.example.com/metrics/monthly_revenue" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Monthly Revenue — Trusted · 95. https://litmus.example.com/metrics/monthly_revenue</desc>
+  <style>
+    .name { font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 12px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #ff6b6b; }
+    .brand { font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="296" height="35" rx="8" ry="8" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="8" y="4.0" width="281" height="28" rx="6" ry="6" fill="#ffffff" stroke="#e5e7eb"/>
+  <circle cx="16" cy="18.0" r="4" fill="#ff6b6b"/>
+  <text x="26" y="22.3" class="name">Monthly Revenue</text>
+  <text x="146" y="22.3" class="label">Trusted · 95</text>
+  <text x="285" y="22.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+      </div>
+      <div class="cell">
+        <div class="label"><code>?label=Revenue&color=059669</code></div>
+        <div class="badge-wrap"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="275" height="36" viewBox="0 0 275 36" role="img" aria-label="litmus trust badge for Revenue: Trusted · 95"><a xlink:href="https://litmus.example.com/metrics/monthly_revenue" target="_blank" rel="noopener">
+  <title>Powered by Litmus — click for full metric detail</title>
+  <desc>Revenue — Trusted · 95. https://litmus.example.com/metrics/monthly_revenue</desc>
+  <style>
+    .name { font: 600 13px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; }
+    .label { font: 500 12px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #059669; }
+    .brand { font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; fill: #6b7280; }
+  </style>
+  <rect x="0.5" y="0.5" width="274" height="35" rx="8" ry="8" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="8" y="4.0" width="259" height="28" rx="6" ry="6" fill="#ffffff" stroke="#e5e7eb"/>
+  <circle cx="16" cy="18.0" r="4" fill="#059669"/>
+  <text x="26" y="22.3" class="name">Revenue</text>
+  <text x="86" y="22.3" class="label">Trusted · 95</text>
+  <text x="263" y="22.3" text-anchor="end" class="brand">litmus</text>
+</a></svg></div>
+      </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Powered by <a href="https://github.com/zinnoberHaus/litmus">Litmus</a> · See
+    <a href="../../docs/badges.md">docs/badges.md</a> for embedding instructions.
+  </footer>
+</body>
+</html>

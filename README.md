@@ -227,7 +227,7 @@ The trust badge is a small SVG (green / yellow / red / grey pill) served from th
 | Red | At least one check failed or errored. |
 | Grey | No recent run — the metric exists but hasn't been checked lately. |
 
-Drop the URL into Notion, Slack, Confluence, a deck, a README. Every badge links back to the metric detail page on your Litmus catalog so anyone can click through and see why it's green (or why it's not). Embedding guide with screenshots for each platform: [`docs/badges.md`](docs/badges.md) (ships in v0.3).
+Drop the URL into Notion, Slack, Confluence, a deck, a README. Every rendered badge wraps in an `<a xlink:href>` pointing at the metric detail page — so anyone can click through and see why it's green (or why it's not). Size variants (`?size=small|medium|large`) and shields.io-style customisation (`?label=`, `?color=`, `?style=for-the-badge`) let you match whatever surface you're embedding into. Platform-by-platform embedding guide: [`docs/badges.md`](docs/badges.md).
 
 ## Hosted catalog (`litmus_api/`)
 
@@ -240,7 +240,8 @@ uvicorn litmus_api.main:app
 ```
 
 - `litmus check metrics/ --push --endpoint https://... --api-key $LITMUS_API_KEY` sends results to the catalog after every local or CI run.
-- `GET /embed/<token>/badge.svg` renders a 275×36 SVG trust pill (green / yellow / red / grey) that never 404s — safe to drop into Notion, Slack, GitHub READMEs.
+- `GET /embed/<token>/badge.svg` renders a trust pill (green / yellow / red / grey) that never 404s — safe to drop into Notion, Slack, GitHub READMEs. `?size=small|medium|large` and shields.io-style `?label=`/`?color=`/`?style=` params are supported; see [`docs/badges.md`](docs/badges.md).
+- `GET /embed/<token>.html` is the OpenGraph share card — paste the metric URL in Slack and the live badge unfurls as the preview image.
 - `GET /api/v1/metrics/{id}/revisions` returns the full spec-edit history so you can correlate a trust regression to the commit that changed the definition.
 - Turn on AI explanations with `pip install 'litmus-data[ai]'` and `export LITMUS_ANTHROPIC_API_KEY=...`; the UI then surfaces a "Why did this fail?" button on failed runs.
 
