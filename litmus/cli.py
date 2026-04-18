@@ -49,6 +49,18 @@ def main():
     default=None,
     help="Path to the SQLite history DB. Defaults to ~/.litmus/history.db or $LITMUS_HISTORY_DB.",
 )
+@click.option(
+    "--push",
+    "push_endpoint",
+    default=None,
+    help="Push results to a Litmus server (URL). Falls back to $LITMUS_ENDPOINT.",
+)
+@click.option(
+    "--api-key",
+    "api_key",
+    default=None,
+    help="API key for --push. Falls back to $LITMUS_API_KEY.",
+)
 def check(
     path: str,
     config: str | None,
@@ -58,6 +70,8 @@ def check(
     schema_version: str,
     no_history: bool,
     history_db: str | None,
+    push_endpoint: str | None,
+    api_key: str | None,
 ):
     """Run trust checks against a .metric file or directory."""
     from litmus.checks.runner import run_checks
@@ -148,6 +162,20 @@ def check(
             report_verbose(console, results)
         else:
             report_summary(console, results)
+
+    # Push results to hosted Litmus if configured (CLI flag or env var).
+    from litmus.api_push import PushConfig, PushError, push_results, read_spec_texts
+
+    push_cfg = PushConfig.from_env(endpoint=push_endpoint, api_key=api_key)
+    if push_cfg is not None:
+        try:
+            spec_texts = read_spec_texts(metric_files, {s.name: s for s in specs})
+            metric_ids = push_results(push_cfg, results, spec_texts=spec_texts)
+            console.print(
+                f"[dim]Pushed {len(metric_ids)} metric(s) to {push_cfg.endpoint}[/dim]"
+            )
+        except PushError as exc:
+            console.print(f"[yellow]Push failed: {exc}[/yellow]")
 
     # Exit code
     any_failed = any(suite.failed > 0 or suite.errors > 0 for _, suite in results)
@@ -924,6 +952,102 @@ def report(directory: str, output_format: str, output: str | None, config: str |
         console.print(f"Report written to {output}")
     else:
         click.echo(report_content)
+
+
+# ── litmus explain-run ──────────────────────────────────────────────
+
+
+@main.command("explain-run")
+@click.argument("run_id")
+@click.option(
+    "--endpoint",
+    default=None,
+    help=(
+        "Litmus server URL. Falls back to $LITMUS_ENDPOINT. Required — the "
+        "AI explainer lives on the server, not in the CLI."
+    ),
+)
+@click.option(
+    "--api-key",
+    "api_key",
+    default=None,
+    help="API key for the Litmus server. Falls back to $LITMUS_API_KEY.",
+)
+@click.option(
+    "--regenerate",
+    is_flag=True,
+    default=False,
+    help="Force regeneration even if an explanation is already cached.",
+)
+def explain_run(
+    run_id: str,
+    endpoint: str | None,
+    api_key: str | None,
+    regenerate: bool,
+):
+    """Ask a Litmus server to explain a failed/errored run with AI.
+
+    The CLI does **not** talk to Anthropic directly — it proxies through the
+    server so the API key, history, and privacy disclosure all live in one
+    place. See ``docs/ai-explanations.md`` for what gets sent.
+    """
+    import json as _json
+    import os
+    import urllib.error
+    import urllib.request
+
+    from rich.panel import Panel
+
+    ep = (endpoint or os.environ.get("LITMUS_ENDPOINT") or "").rstrip("/")
+    if not ep:
+        console.print(
+            "[red]No endpoint given. Pass --endpoint or set "
+            "$LITMUS_ENDPOINT.[/red]"
+        )
+        sys.exit(1)
+
+    key = api_key or os.environ.get("LITMUS_API_KEY")
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+
+    url = f"{ep}/api/v1/runs/{run_id}/explain"
+    if regenerate:
+        url += "?regenerate=true"
+
+    req = urllib.request.Request(
+        url, data=b"{}", method="POST", headers=headers
+    )
+    try:
+        # 45s client-side timeout — the server promises 30s, leaves 15s slack.
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            body = _json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        console.print(f"[red]HTTP {exc.code}: {detail}[/red]")
+        sys.exit(1)
+    except urllib.error.URLError as exc:
+        console.print(f"[red]Could not reach {ep}: {exc.reason}[/red]")
+        sys.exit(1)
+
+    console.print(
+        Panel.fit(
+            body.get("hypothesis", "(no hypothesis)"),
+            title=f"Why did run {run_id} fail?",
+            border_style="yellow",
+        )
+    )
+    console.print(
+        Panel.fit(
+            body.get("suggested_action", "(no suggested action)"),
+            title="Suggested next step",
+            border_style="cyan",
+        )
+    )
+    console.print(
+        f"[dim]model={body.get('model_id', '?')}  "
+        f"generated={body.get('created_at', '?')}[/dim]"
+    )
 
 
 if __name__ == "__main__":

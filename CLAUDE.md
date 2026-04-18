@@ -98,9 +98,13 @@ Connectors are constructed by `config.settings.get_connector(cfg)` based on `war
 
 ### CLI wiring (`litmus/cli.py`)
 
-Single-file Click app with subcommands `init`, `check`, `parse`, `explain`, `import-dbt`, `export`, `report`, `share`. Heavy imports (connectors, reporters, generators, history) are done **lazily inside each command** to keep `litmus --help` fast — preserve that pattern when adding subcommands.
+Single-file Click app with subcommands `init`, `check`, `parse`, `explain`, `explain-run`, `import-dbt`, `export`, `report`, `share`. Heavy imports (connectors, reporters, generators, history) are done **lazily inside each command** to keep `litmus --help` fast — preserve that pattern when adding subcommands.
 
 Exit code contract: `litmus check` exits `1` if **any** suite has `failed > 0` or `errors > 0`; warnings alone don't fail the run. The reusable GitHub Action (`action.yml`) layers an optional `fail-on-warning` flag on top — if you change the exit-code contract, update the action too.
+
+### AI run explanations (`litmus_api/ai/`)
+
+Optional, opt-in-per-install feature for the hosted server. `litmus_api/ai/explain.py` exposes `explain_run(session, run_id)` which asks Claude Sonnet 4.6 for a one-paragraph hypothesis + suggested action when a run fails or errors. Uses the `anthropic` SDK (gated behind the `[ai]` extras — not pulled into `[server]`), forced tool-use for a hard output contract, and upserts a `RunExplanation` row so repeat reads are free. The feature is triggered exclusively by `POST /api/v1/runs/{id}/explain` (CLI: `litmus explain-run <id> --endpoint ...`); it never runs on ingestion and never explains passed/warning runs. **Privacy disclosure:** the prompt includes metric metadata, trust rules, current `CheckResult` rows, and the last 5 runs' aggregates — never raw warehouse rows or SQL. Full details in `docs/ai-explanations.md`. If `LITMUS_ANTHROPIC_API_KEY` (or `ANTHROPIC_API_KEY`) is unset, the route returns 500 "not configured" and the UI gracefully shows a muted fallback instead of a crash.
 
 ## Tests
 

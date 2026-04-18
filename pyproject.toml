@@ -37,13 +37,31 @@ dependencies = [
 snowflake = ["snowflake-connector-python>=3.0"]
 bigquery = ["google-cloud-bigquery>=3.0"]
 postgres = ["psycopg2-binary>=2.9"]
-all = ["litmus-data[snowflake,bigquery,postgres]"]
+server = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.5",
+    "httpx>=0.27",
+]
+# AI-powered run explanations. Keeps the Anthropic SDK out of the slim
+# [server] install — only pulled in by operators who want "Why did this fail?"
+# on their hosted Litmus instance.
+ai = [
+    "anthropic>=0.40",
+]
+all = ["litmus-data[snowflake,bigquery,postgres,server,ai]"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
     "types-PyYAML>=6.0",
+    "fastapi>=0.110",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.5",
+    "httpx>=0.27",
+    "anthropic>=0.40",
 ]
 
 [project.scripts]
@@ -57,7 +75,7 @@ Issues = "https://github.com/zinnoberHaus/litmus/issues"
 Changelog = "https://github.com/zinnoberHaus/litmus/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
-include = ["litmus*"]
+include = ["litmus*", "litmus_api*"]
 
 [tool.setuptools.package-data]
 "litmus.generators" = ["assets/*.png"]
