@@ -24,7 +24,7 @@ Litmus is the **trust-and-approval layer for business metrics**. One underlying 
 
 Engineers define canonical metric contracts. PMs ask questions and approve definitions in Slack. Everyone sees a live trust badge wherever metrics are referenced. Same underlying `MetricSpec`, three cleanly separated surfaces.
 
-> **v0.3 note.** The engineer surface (CLI + `.metric` DSL + hosted catalog + badge) ships today. The **dbt package**, the **Slack sign-off + `/ask` bot**, and the **three-audience UI** are shipping alongside v0.3 — this README marks which sections describe "today" vs "v0.3 in flight". Nothing described here is vapourware; everything has an issue and a reviewer.
+> **v0.3 release.** Every surface described below ships in v0.3: the engineer surface (`.metric` DSL + YAML + hosted catalog + badge), the **dbt package** (Elementary-style, drop-in for teams already on dbt), the **Slack sign-off + `/ask` bot** for PMs, and the **three-audience UI**. See [`CHANGELOG.md`](CHANGELOG.md#030---2026-04-18) for the full list.
 
 ## The problem
 
@@ -75,7 +75,7 @@ Trust:
   Value must not change more than 30% month over month
 ```
 
-Prefer YAML? A peer file at `metrics/revenue.yaml` parses to the same `MetricSpec`. Full YAML syntax is specified in [`docs/spec-language.md`](docs/spec-language.md#yaml-alternative). DSL ↔ YAML round-trip parity is CI-enforced. _(YAML parser ships in v0.3.)_
+Prefer YAML? A peer file at `metrics/revenue.yaml` parses to the same `MetricSpec`. Full YAML syntax is specified in [`docs/spec-language.md`](docs/spec-language.md#yaml-alternative). DSL ↔ YAML round-trip parity is CI-enforced.
 
 Run the checks:
 
@@ -183,7 +183,7 @@ The composite action is defined in [`action.yml`](action.yml). Inputs: `path` (r
 
 ### Run it inside dbt
 
-> _Shipping in v0.3. See `dbt_packages/litmus/` (landing alongside this release) and [`docs/getting-started.md`](docs/getting-started.md) for the install walkthrough._
+> _Ships in v0.3. See `dbt_packages/litmus/` (landing alongside this release) and [`docs/getting-started.md`](docs/getting-started.md) for the install walkthrough._
 
 For teams that already run dbt, Litmus ships as a **dbt package** that follows the [Elementary](https://github.com/elementary-data/elementary) pattern: an `on-run-end` hook runs your trust rules and materialises results to two warehouse tables (`{schema}_litmus.litmus_runs` and `litmus_check_results`). No separate CLI job, no separate history store — your dbt run writes both the models and their trust verdicts in the same transaction.
 
@@ -203,7 +203,7 @@ The Python CLI auto-detects a dbt project in the cwd and reads/writes the same w
 
 ## How PMs use Litmus
 
-> _Shipping in v0.3. See `docs/install/slack.md` (landing alongside this release) for the setup walkthrough._
+> _Ships in v0.3. See `docs/install/slack.md` (landing alongside this release) for the setup walkthrough._
 
 PMs don't read SQL, don't write YAML, and don't want to learn git. v0.3 gives them two Slack-native surfaces:
 

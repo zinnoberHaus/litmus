@@ -747,7 +747,10 @@ def _window_phrase(time_window: str) -> str:
 
 _TRUST_CLAUSE: dict[str, str] = {
     "passed": "Trust is green — all checks passed on the latest run.",
-    "warning": "One or more checks are in warning on the latest run — treat this number as provisional.",
+    "warning": (
+        "One or more checks are in warning on the latest run — "
+        "treat this number as provisional."
+    ),
     "failed": "Trust is failing on the latest run — confirm before acting on this number.",
     "error": "The latest trust run errored — the number may be stale.",
     "unknown": "No trust run has been recorded yet — the number is unverified.",

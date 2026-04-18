@@ -7,7 +7,6 @@ is covered by ``tests/test_ai/test_ask.py``.
 
 from __future__ import annotations
 
-from datetime import datetime
 from textwrap import dedent
 from typing import Any
 

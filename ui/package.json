@@ -1,8 +1,8 @@
 {
   "name": "litmus-ui",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Litmus metric catalog web UI — scaffolded for the 0.2 hosted/embeddable pivot",
+  "description": "Litmus metric catalog web UI — three-audience surface (engineers, PMs, viewers)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
