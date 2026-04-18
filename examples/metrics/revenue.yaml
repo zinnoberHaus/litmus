@@ -1,0 +1,36 @@
+# YAML twin of revenue.metric — both files parse to the same MetricSpec.
+# See docs/spec-language.md#yaml-alternative for the full shape reference.
+# (YAML parser ships in v0.3; round-trip parity with the DSL is CI-enforced.)
+metric: Monthly Revenue
+description: >-
+  Total revenue recognized across all channels in a calendar month, including
+  one-time purchases, subscription charges, and usage-based fees.
+owner: finance-analytics
+tags: [revenue, finance, monthly, executive-kpi]
+
+sources:
+  - orders
+  - invoices
+
+given:
+  - the order status is "completed" or "refunded"
+  - the invoice has been finalized
+  - the reporting period is the current calendar month
+
+when:
+  - sum the net amount from finalized invoices
+  - subtract refunds and credit adjustments
+  - convert all amounts to USD using end-of-day exchange rates
+
+result: Monthly Revenue
+
+trust:
+  - freshness: { max: 6 hours }
+  - null_rate: { column: net_amount, max: 1% }
+  - null_rate: { column: currency, max: 0% }
+  - volume:    { max_drop: 15%, period: day over day }
+  - range:     { min: 10000, max: 5000000 }
+  - change:    { max: 40%, period: month over month }
+  - duplicate_rate: { column: invoice_id, max: 0% }
+  - schema_drift: {}
+  - distribution_shift: { column: net_amount, max: 25%, period: month over month }

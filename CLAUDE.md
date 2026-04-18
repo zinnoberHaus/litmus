@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Litmus** — BDD-style metric definitions with built-in data trust checks. Users write `.metric` files in a Gherkin-inspired plain-English DSL (Given/When/Then + a Trust block), and the CLI runs automated data-quality checks against a warehouse.
+**Litmus** — canonical metric contracts for engineers, AI-answered questions for PMs, embeddable trust badges for everyone. Engineers define metrics as code (a Gherkin-inspired `.metric` DSL or YAML — both parse to the same `MetricSpec`). The CLI and the dbt package run automated data-quality checks against a warehouse. A hosted catalog stores revisions, renders SVG trust badges, powers Slack sign-off + `/ask`, and serves the three-audience UI.
 
-Package published on PyPI as **`litmus-data`**; the import name and CLI entry point are **`litmus`** (`litmus.cli:main`). Python **3.10+**.
+Package published on PyPI as **`litmus-data`**; the import name and CLI entry point are **`litmus`** (`litmus.cli:main`). Python **3.10+**. v0.3 ships alongside a dbt package (`dbt_packages/litmus/`), a Slack sign-off + `/ask` bot, and a redesigned UI — see `REFACTOR_BLUEPRINT.md` for the v0.3 scope.
 
 ## Common commands
 
@@ -25,7 +25,8 @@ pytest -k "freshness"
 
 # Exercise the CLI end-to-end against the bundled examples
 litmus check examples/metrics/                      # run trust checks against a warehouse
-litmus check examples/metrics/ --no-history         # skip SQLite history writes (disables change/drift rules)
+litmus check examples/metrics/ --no-history         # skip history writes (disables change/drift rules)
+litmus check examples/metrics/ --backend warehouse  # (v0.3) persist history to the warehouse via the dbt package's tables instead of SQLite
 litmus parse examples/metrics/revenue.metric        # debug: dump parsed MetricSpec
 litmus explain examples/metrics/revenue.metric      # plain-English doc
 litmus report examples/metrics/ -f html -o out.html
@@ -41,13 +42,15 @@ CI (`.github/workflows/ci.yml`) runs lint → pytest-with-coverage → mypy acro
 The flow through the codebase is a **four-stage pipeline**, and each stage corresponds to one top-level subpackage under `litmus/`. Understanding the handoff between stages is the fastest way to get productive:
 
 ```
-.metric file  ──▶  parser/  ──▶  spec/MetricSpec  ──▶  checks/runner  ──▶  reporters/
-                                                              │
-                                                              ▼
-                                                        connectors/  (warehouse I/O)
+.metric / .yaml  ──▶  parser/  ──▶  spec/MetricSpec  ──▶  checks/runner  ──▶  reporters/
+                                                                │
+                                                                ▼
+                                                          connectors/  (warehouse I/O)
 ```
 
-### 1. `litmus/parser/` — `.metric` → `MetricSpec`
+Both `.metric` (Gherkin-shaped DSL) and `.yaml` / `.yml` (v0.3) files lower to the same `MetricSpec` — downstream code never cares which surface the user wrote. Round-trip parity is CI-enforced.
+
+### 1. `litmus/parser/` — `.metric` (or YAML) → `MetricSpec`
 
 Hand-rolled lexer + recursive-descent parser, **not** PLY/Lark.
 
@@ -102,9 +105,14 @@ Single-file Click app with subcommands `init`, `check`, `parse`, `explain`, `exp
 
 Exit code contract: `litmus check` exits `1` if **any** suite has `failed > 0` or `errors > 0`; warnings alone don't fail the run. The reusable GitHub Action (`action.yml`) layers an optional `fail-on-warning` flag on top — if you change the exit-code contract, update the action too.
 
-### 6. `litmus_api/` — FastAPI catalog + embeddable badges (v0.2 wedge)
+### 6. `litmus_api/` — FastAPI catalog + embeddable badges + dbt package backend
 
-Separate package next to `litmus/`. Provides the hosted metric catalog, run history, and embeddable trust-badge SVG that the CLI can push to. Install with the `[server]` extras.
+Separate package next to `litmus/`. Provides the hosted metric catalog, run history, embeddable trust-badge SVG, Slack sign-off + `/ask` routes (v0.3), and the three-audience UI's backend. Install with the `[server]` extras.
+
+**Two ways runs land here:**
+
+1. **CLI / CI (`litmus check --push`)** — default for solo engineers and GitHub Actions. SQLite history at `~/.litmus/history.db`; push results to the catalog over HTTP.
+2. **dbt package (v0.3, `dbt_packages/litmus/`)** — for teams already running dbt. An `on-run-end` hook materialises trust verdicts into `{schema}_litmus.litmus_runs` and `litmus_check_results` in the same warehouse. The Python CLI auto-detects a dbt project and reads/writes those same tables via `WarehouseHistoryStore` — pass `--backend {sqlite,warehouse,auto}` to override. Detection is owned by `config.settings`; `auto` picks `warehouse` when a `dbt_project.yml` is present and the profile matches, else falls back to SQLite.
 
 Schema is managed by **Alembic**, not `create_all`:
 

@@ -16,7 +16,14 @@ console = Console()
 @click.group()
 @click.version_option(version=__version__, prog_name="litmus")
 def main():
-    """Litmus — BDD-style metric definitions with built-in data trust checks."""
+    """Litmus — canonical metric contracts with built-in data trust checks.
+
+    \b
+    Three audiences, one spec:
+      engineers  — .metric / YAML contracts, run via CLI, dbt package, or CI
+      PMs        — Slack sign-off + /ask (v0.3)
+      everyone   — embeddable trust badges
+    """
 
 
 # ── litmus check ────────────────────────────────────────────────────
@@ -73,7 +80,7 @@ def check(
     push_endpoint: str | None,
     api_key: str | None,
 ):
-    """Run trust checks against a .metric file or directory."""
+    """Run trust checks against a .metric (or YAML) file or directory."""
     from litmus.checks.runner import run_checks
     from litmus.config.settings import get_connector, load_config
     from litmus.parser import parse_metric_file
@@ -188,7 +195,7 @@ def check(
 @main.command()
 @click.argument("file")
 def parse(file: str):
-    """Parse a .metric file and display the structured output."""
+    """Parse a .metric (or YAML) file and display the structured output."""
     from litmus.parser import parse_metric_file
 
     try:
@@ -414,7 +421,7 @@ def _render_readme(project_name: str, warehouse: str, database: str) -> str:
 
     return (
         f"# {project_name}\n\n"
-        "A Litmus project — BDD-style metric definitions with built-in "
+        "A Litmus project — canonical metric contracts with built-in "
         "data trust checks.\n\n"
         "## Quickstart\n\n"
         f"{seed_line}"
