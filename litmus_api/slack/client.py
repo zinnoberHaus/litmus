@@ -105,6 +105,59 @@ def post_signoff_message(
         return {"ok": False, "error": str(exc)}
 
 
+def post_message(
+    channel: str | None,
+    text: str,
+    *,
+    blocks: list[dict[str, Any]] | None = None,
+    thread_ts: str | None = None,
+    webhook_url: str | None = None,
+    bot_token: str | None = None,
+) -> dict[str, Any]:
+    """Post a plain message to Slack.
+
+    Two delivery paths:
+
+    1. **Bot token** (``LITMUS_SLACK_BOT_TOKEN``) — preferred when we need to
+       post to a channel the ``app_mention`` event came from. Hits
+       ``chat.postMessage``, which respects ``thread_ts`` so replies land in
+       the same thread as the mention.
+    2. **Incoming webhook** (``LITMUS_SLACK_WEBHOOK_URL``) — fallback for
+       deployments that only configured the MVP webhook path. Can't scope to
+       a channel at runtime; fires into whatever channel the webhook is
+       bound to in the Slack app config.
+
+    Failures are swallowed and returned as a sentinel dict — the caller
+    (the ``app_mention`` handler) must never raise into Slack's event loop.
+    """
+    if bot_token is None:
+        bot_token = os.environ.get("LITMUS_SLACK_BOT_TOKEN")
+    if webhook_url is None:
+        webhook_url = os.environ.get("LITMUS_SLACK_WEBHOOK_URL")
+
+    payload: dict[str, Any] = {"text": text}
+    if blocks is not None:
+        payload["blocks"] = blocks
+    if thread_ts:
+        payload["thread_ts"] = thread_ts
+
+    try:
+        if bot_token and channel:
+            payload["channel"] = channel
+            return _post_json(
+                "https://slack.com/api/chat.postMessage",
+                payload,
+                headers={"Authorization": f"Bearer {bot_token}"},
+            )
+        if webhook_url:
+            # Incoming webhooks ignore ``channel`` but accept ``text``/``blocks``.
+            return _post_json(webhook_url, payload)
+        return {"ok": False, "error": "no_slack_delivery_configured"}
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        logger.warning("Slack post_message failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
+
+
 def update_message(
     webhook_url_or_api: str,
     channel_id: str | None,
@@ -143,6 +196,70 @@ def update_message(
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
         logger.warning("Slack chat.update failed: %s", exc)
         return {"ok": False, "error": str(exc)}
+
+
+_TRUST_EMOJI: dict[str, str] = {
+    "passed": ":large_green_circle:",
+    "warning": ":large_yellow_circle:",
+    "failed": ":red_circle:",
+    "error": ":red_circle:",
+    "unknown": ":white_circle:",
+}
+
+
+def build_ask_answer_blocks(
+    *,
+    answer: str,
+    metric_name: str | None,
+    metric_slug: str,
+    trust_status: str,
+    metric_url: str | None,
+    explanation: str | None = None,
+) -> list[dict[str, Any]]:
+    """Build the Block Kit payload for an answered Slack ``/ask`` or mention.
+
+    Layout: a one-line summary (emoji + bold metric name) on top, the full
+    answer as a mrkdwn section, then a context footer with a link back to the
+    metric detail page. If the caller didn't configure a ``LITMUS_PUBLIC_URL``
+    we skip the link and keep the card self-contained.
+    """
+    emoji = _TRUST_EMOJI.get(trust_status, _TRUST_EMOJI["unknown"])
+    header_label = metric_name or metric_slug
+    blocks: list[dict[str, Any]] = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"{emoji} *{header_label}* — trust: `{trust_status}`",
+            },
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": answer},
+        },
+    ]
+    if explanation:
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {"type": "mrkdwn", "text": f":information_source: {explanation}"}
+                ],
+            }
+        )
+    if metric_url and metric_url.startswith(("http://", "https://")):
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"<{metric_url}|View metric definition>",
+                    }
+                ],
+            }
+        )
+    return blocks
 
 
 def _build_signoff_blocks(

@@ -30,8 +30,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from litmus_api.config import get_settings
 from litmus_api.deps import current_org, db_session
-from litmus_api.models import Metric, MetricRevision, Org
+from litmus_api.models import Metric, MetricRevision, Org, ensure_default_org
 from litmus_api.slack import client as slack_client
 from litmus_api.slack.signatures import is_valid_signature
 
@@ -86,16 +87,19 @@ async def slack_events(
     request: Request,
     x_slack_signature: str | None = Header(default=None),
     x_slack_request_timestamp: str | None = Header(default=None),
+    session: Session = Depends(db_session),
 ) -> dict[str, Any]:
     """Slack Events API callback.
 
-    v0.3 handles two things:
+    Three concerns, in order:
 
     1. ``url_verification`` — Slack's initial handshake when you register
        the Events URL. Return the ``challenge`` string verbatim.
-    2. Everything else — log + 200. Task #54 fills in ``app_mention`` with
-       the AI Q&A logic; for now we just ack so Slack doesn't disable the
-       subscription after repeated 4xxs.
+    2. ``app_mention`` — the v0.3 PM surface. Strip the ``@litmus`` prefix,
+       route the question through :mod:`litmus_api.ai.ask`, and post the
+       answer back in the same channel / thread.
+    3. Everything else — log + 200. Slack disables the subscription after
+       repeated 4xxs so we ack anything we don't explicitly handle.
     """
     body = await _verify_slack_request(
         request, x_slack_signature, x_slack_request_timestamp
@@ -117,16 +121,141 @@ async def slack_events(
             )
         return {"challenge": challenge}
 
-    # TODO(#54): dispatch ``event_callback`` → ``app_mention`` to the AI
-    # Q&A handler. For now we log and ack so Slack keeps the subscription
-    # healthy.
     event = payload.get("event") or {}
+    event_type = event.get("type")
+
+    if event_type == "app_mention":
+        # Slack retries events that don't 200 within 3 seconds. We process
+        # synchronously because the AI call typically finishes in <5s in the
+        # tests that exercise this path; production deployments with slow
+        # upstreams should push this to a background task (v0.4).
+        return _handle_app_mention(session, event)
+
     logger.info(
-        "slack event received: type=%s subtype=%s (stubbed; #54 fills in)",
-        event.get("type"),
+        "slack event received: type=%s subtype=%s (no handler)",
+        event_type,
         event.get("subtype"),
     )
     return {"ok": True}
+
+
+def _extract_mention_question(text: str) -> str:
+    """Strip the leading ``<@UXXXXX>`` token so the question reaches the engine clean.
+
+    Slack always sends the raw mention token at the start of ``app_mention``
+    ``text``. We drop the first token if it matches the mention pattern so
+    "hey @litmus what was revenue last month?" becomes
+    "what was revenue last month?" — the shape the ``ask`` engine expects.
+    """
+    stripped = (text or "").strip()
+    if not stripped:
+        return ""
+    # Mentions are literally "<@U1234>" — drop the first token if it looks like one.
+    tokens = stripped.split(None, 1)
+    first = tokens[0]
+    if first.startswith("<@") and first.endswith(">"):
+        return tokens[1].strip() if len(tokens) > 1 else ""
+    return stripped
+
+
+def _handle_app_mention(session: Session, event: dict[str, Any]) -> dict[str, Any]:
+    """Resolve the question and post the answer back to the source channel.
+
+    Fails soft — an engine error posts a friendly message rather than a 500.
+    Slack's retry behaviour is triggered by non-2xx responses, and we never
+    want a transient Anthropic outage to cause duplicate reply messages. The
+    route always returns ``{"ok": True}``.
+    """
+    text = event.get("text") or ""
+    channel = event.get("channel")
+    thread_ts = event.get("thread_ts") or event.get("ts")
+    question = _extract_mention_question(text)
+
+    if not question:
+        slack_client.post_message(
+            channel,
+            text="Mention me with a question — e.g. `@litmus what was revenue last month?`",
+            thread_ts=thread_ts,
+        )
+        return {"ok": True}
+
+    # Lazy import — keeps the slack route callable in deployments that didn't
+    # install ``[ai]`` extras (the engine raises AskError("ai_not_configured")
+    # at call-time, which we turn into a friendly message below).
+    from litmus_api.ai.ask import AskError, answer_question  # noqa: PLC0415
+
+    settings = get_settings()
+    # Slack events fire outside the normal auth stack; resolve the default
+    # org the same way the GitHub webhook handler does so we always have
+    # something scoped to query.
+    org = ensure_default_org(session, settings.default_org_slug)
+
+    try:
+        result = answer_question(
+            session,
+            org,
+            question,
+            public_url=settings.public_url,
+        )
+    except AskError as exc:
+        logger.info("ask: slack mention unresolved (%s): %s", exc.code, exc)
+        friendly = _friendly_ask_error(exc)
+        slack_client.post_message(channel, text=friendly, thread_ts=thread_ts)
+        return {"ok": True}
+    except Exception as exc:  # noqa: BLE001 — defensive, fail-soft
+        logger.exception("ask: slack mention crashed: %s", exc)
+        slack_client.post_message(
+            channel,
+            text=":warning: I couldn't resolve that question — please try again shortly.",
+            thread_ts=thread_ts,
+        )
+        return {"ok": True}
+
+    session.commit()
+
+    blocks = slack_client.build_ask_answer_blocks(
+        answer=result.answer,
+        metric_name=result.metric_name,
+        metric_slug=result.metric_slug,
+        trust_status=result.trust_status,
+        metric_url=result.metric_url,
+        explanation=result.explanation,
+    )
+    slack_client.post_message(
+        channel,
+        text=result.answer,  # Fallback for notifications / unfurls.
+        blocks=blocks,
+        thread_ts=thread_ts,
+    )
+    return {"ok": True}
+
+
+def _friendly_ask_error(exc: Any) -> str:
+    """Translate an :class:`AskError` into a one-line Slack reply.
+
+    Slack is the least forgiving surface for stack traces — we always want
+    a human message, even when the engine hit a configuration problem.
+    """
+    code = getattr(exc, "code", "") or ""
+    if code == "ai_not_configured":
+        return (
+            ":warning: AI answers aren't configured on this server. "
+            "Ask your admin to set `LITMUS_ANTHROPIC_API_KEY`."
+        )
+    if code == "unresolved":
+        base = ":thinking_face: I couldn't match that to a metric in the catalog."
+        suggestions = getattr(exc, "suggestions", None) or []
+        if suggestions:
+            base += " Try: " + ", ".join(f"`{s}`" for s in suggestions[:3]) + "."
+        return base
+    if code == "metric_not_found":
+        return f":warning: {exc}"
+    if code == "warehouse_unavailable":
+        return (
+            ":warning: The warehouse query failed — the metric definition is "
+            "fine but I couldn't fetch a fresh number. Try again shortly."
+        )
+    return ":warning: I couldn't resolve that question — please try again shortly."
 
 
 # ── /slack/commands ───────────────────────────────────────────────────

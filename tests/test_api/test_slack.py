@@ -237,15 +237,20 @@ class TestEventsEndpoint:
         )
         assert resp.status_code == 401
 
-    def test_app_mention_event_is_stubbed_to_200(
-        self, client: TestClient, configured_slack
+    def test_app_mention_event_acks_without_question(
+        self, client: TestClient, configured_slack, slack_http: _SlackHTTPRecorder
     ) -> None:
-        """Task #54 fills in the handler — until then we ack so Slack doesn't
-        disable the subscription."""
+        """An ``app_mention`` with just the bot handle and no question still
+        gets a friendly nudge, not a crash."""
         body = json.dumps(
             {
                 "type": "event_callback",
-                "event": {"type": "app_mention", "text": "hey litmus"},
+                "event": {
+                    "type": "app_mention",
+                    "text": "<@U0LITMUS>",
+                    "channel": "C123",
+                    "ts": "1713200000.000100",
+                },
             }
         ).encode("utf-8")
         resp = client.post(
@@ -255,6 +260,118 @@ class TestEventsEndpoint:
         )
         assert resp.status_code == 200
         assert resp.json() == {"ok": True}
+        # The "mention me with a question" nudge fires even when the ask
+        # engine is never invoked.
+        assert len(slack_http.calls) == 1
+        assert "Mention me" in slack_http.calls[0]["payload"]["text"]
+
+    def test_app_mention_routes_question_to_ask_engine(
+        self,
+        client: TestClient,
+        configured_slack,
+        slack_http: _SlackHTTPRecorder,
+        monkeypatch,
+    ) -> None:
+        """The heart of task #54: ``@litmus what was revenue?`` must reach
+        the ``ask`` engine with the question stripped of the mention token,
+        and the answer must be posted back to the source channel+thread."""
+        import litmus_api.ai.ask as ask_mod
+        from litmus_api.ai.ask import AskAnswer
+
+        captured: dict[str, Any] = {}
+
+        def _stub(session, org, question, **kwargs):
+            captured["question"] = question
+            captured["org_slug"] = org.slug
+            return AskAnswer(
+                answer="Monthly Revenue was 4,218,430. Trust is green.",
+                metric_slug="revenue",
+                metric_name="Monthly Revenue",
+                metric_url="https://litmus.example/metrics/revenue",
+                value=4_218_430.0,
+                trust_status="passed",
+                definition_url="https://litmus.example/metrics/revenue",
+                explanation=None,
+                run_id="run-xyz",
+                time_window="last_period",
+                model_id="claude-sonnet-4-6",
+            )
+
+        monkeypatch.setattr(ask_mod, "answer_question", _stub)
+
+        body = json.dumps(
+            {
+                "type": "event_callback",
+                "event": {
+                    "type": "app_mention",
+                    "text": "<@U0LITMUS> what was revenue last month?",
+                    "channel": "C123",
+                    "ts": "1713200000.000200",
+                },
+            }
+        ).encode("utf-8")
+        resp = client.post(
+            "/api/v1/slack/events",
+            content=body,
+            headers=_slack_headers(body),
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True}
+
+        # Engine received the question sans mention prefix.
+        assert captured["question"] == "what was revenue last month?"
+        # Exactly one outbound Slack post — the answer.
+        assert len(slack_http.calls) == 1
+        payload = slack_http.calls[0]["payload"]
+        assert "4,218,430" in payload["text"]
+        # Threaded reply must target the mention's ts.
+        assert payload.get("thread_ts") == "1713200000.000200"
+        # Block Kit cards include the trust-status chip.
+        blocks = payload.get("blocks") or []
+        chip_texts = [
+            b.get("text", {}).get("text", "")
+            for b in blocks
+            if b.get("type") == "section"
+        ]
+        assert any("passed" in t for t in chip_texts)
+
+    def test_app_mention_posts_friendly_error_on_ask_failure(
+        self,
+        client: TestClient,
+        configured_slack,
+        slack_http: _SlackHTTPRecorder,
+        monkeypatch,
+    ) -> None:
+        """Engine raises → user sees a one-liner, NOT a stack trace."""
+        import litmus_api.ai.ask as ask_mod
+        from litmus_api.ai.ask import AskError
+
+        def _raise(*_a, **_kw):
+            raise AskError("ai_not_configured", "no key")
+
+        monkeypatch.setattr(ask_mod, "answer_question", _raise)
+
+        body = json.dumps(
+            {
+                "type": "event_callback",
+                "event": {
+                    "type": "app_mention",
+                    "text": "<@U0LITMUS> revenue?",
+                    "channel": "C123",
+                    "ts": "1713200000.000300",
+                },
+            }
+        ).encode("utf-8")
+        resp = client.post(
+            "/api/v1/slack/events",
+            content=body,
+            headers=_slack_headers(body),
+        )
+        # Always 200 — Slack would retry on non-2xx and duplicate the message.
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True}
+        assert len(slack_http.calls) == 1
+        assert "configured" in slack_http.calls[0]["payload"]["text"]
 
 
 # ── /api/v1/slack/interactions ────────────────────────────────────────
