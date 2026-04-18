@@ -174,6 +174,10 @@ Events:        Just the push event
 
 The webhook only fetches from public repos (it uses `raw.githubusercontent.com`). Full setup walkthrough: [`docs/github-webhook.md`](docs/github-webhook.md).
 
+### BI reconciliation
+
+Same metric, three tools, three numbers — until now. Install `pip install 'litmus-data[bi]'`, attach a Looker or Tableau identifier to any catalog metric (`POST /api/v1/metrics/{id}/bi-mappings`), and `litmus reconcile <metric>` will fetch every BI-tool value, compare it to the latest warehouse run, and flag drift as pass (<2%), warn (<10%), or fail. The UI's reconciliation panel always renders — the warehouse row is synthesized from the latest run even before any mappings exist. Setup + connector identifier formats: [`docs/bi-connectors.md`](docs/bi-connectors.md).
+
 ## How it fits with dbt and semantic layers
 
 Litmus is a **trust / contract layer**, not a replacement for your transformation or semantic tools. dbt and Cube / LookML / MetricFlow answer *"how is this metric computed?"* — Litmus answers *"is the metric currently trustworthy, and did the business sign off on its definition?"* `litmus import-dbt` seeds specs from an existing dbt project, and `litmus export --to dbt` emits dbt singular tests so the same rules can run inside a dbt CI pipeline. The two stacks are designed to sit side by side.

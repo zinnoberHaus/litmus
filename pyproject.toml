@@ -51,7 +51,14 @@ server = [
 ai = [
     "anthropic>=0.40",
 ]
-all = ["litmus-data[snowflake,bigquery,postgres,server,ai]"]
+# BI-tool reconciliation. Kept out of [server] because Looker/Tableau SDKs
+# are heavy; operators who don't reconcile against a BI tool shouldn't pay
+# the install cost. Mocked in CI — no real BI creds required to run tests.
+bi = [
+    "looker-sdk>=23.0",
+    "tableauserverclient>=0.25",
+]
+all = ["litmus-data[snowflake,bigquery,postgres,server,ai,bi]"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

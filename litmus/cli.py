@@ -1185,5 +1185,101 @@ def explain_run(
     )
 
 
+# ── litmus reconcile ────────────────────────────────────────────────
+
+
+@main.command("reconcile")
+@click.argument("metric_slug")
+@click.option(
+    "--endpoint",
+    default=None,
+    help=(
+        "Litmus server URL. Falls back to $LITMUS_ENDPOINT. Required — "
+        "reconciliation lives on the server, not in the CLI."
+    ),
+)
+@click.option(
+    "--api-key",
+    "api_key",
+    default=None,
+    help="API key for the Litmus server. Falls back to $LITMUS_API_KEY.",
+)
+def reconcile(
+    metric_slug: str,
+    endpoint: str | None,
+    api_key: str | None,
+):
+    """Trigger BI reconciliation for a metric on a Litmus server.
+
+    POSTs to ``/api/v1/metrics/{slug}/reconcile``. The server iterates the
+    metric's BI mappings, fetches each value, computes the delta vs the
+    latest warehouse run, and returns one row per source.
+    """
+    import json as _json
+    import os
+    import urllib.error
+    import urllib.request
+
+    from rich.table import Table
+
+    ep = (endpoint or os.environ.get("LITMUS_ENDPOINT") or "").rstrip("/")
+    if not ep:
+        console.print(
+            "[red]No endpoint given. Pass --endpoint or set "
+            "$LITMUS_ENDPOINT.[/red]"
+        )
+        sys.exit(1)
+
+    key = api_key or os.environ.get("LITMUS_API_KEY")
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+
+    url = f"{ep}/api/v1/metrics/{metric_slug}/reconcile"
+    req = urllib.request.Request(url, data=b"{}", method="POST", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            rows = _json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        console.print(f"[red]HTTP {exc.code}: {detail}[/red]")
+        sys.exit(1)
+    except urllib.error.URLError as exc:
+        console.print(f"[red]Could not reach {ep}: {exc.reason}[/red]")
+        sys.exit(1)
+
+    if not rows:
+        console.print(
+            f"[yellow]No BI mappings registered for {metric_slug!r}.[/yellow] "
+            "Add one via POST /api/v1/metrics/{id}/bi-mappings first."
+        )
+        return
+
+    table = Table(title=f"Reconciliation — {metric_slug}")
+    table.add_column("Source")
+    table.add_column("Value", justify="right")
+    table.add_column("Delta", justify="right")
+    table.add_column("Status")
+    table.add_column("Notes")
+    for row in rows:
+        status_raw = (row.get("status") or "").lower()
+        status_color = {
+            "pass": "green",
+            "warn": "yellow",
+            "fail": "red",
+        }.get(status_raw, "white")
+        delta = row.get("delta", 0.0) or 0.0
+        value = row.get("value", 0.0) or 0.0
+        notes = row.get("error") or row.get("identifier") or ""
+        table.add_row(
+            str(row.get("source", "?")),
+            f"{value:,.2f}",
+            f"{delta * 100:+.2f}%",
+            f"[{status_color}]{status_raw.upper() or '?'}[/{status_color}]",
+            str(notes),
+        )
+    console.print(table)
+
+
 if __name__ == "__main__":
     main()

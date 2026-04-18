@@ -204,6 +204,7 @@ function toMetricCard(
   m: MetricPayload,
   history: TrustHistoryPoint[],
   lineage?: { nodes: LineageNode[]; edges: LineageEdge[] } | null,
+  reconciliation?: ReconciliationRow[] | null,
 ): Metric {
   const spec = m.spec ?? {};
   const sources = (spec["sources"] as string[] | undefined) ?? [];
@@ -215,6 +216,14 @@ function toMetricCard(
   const trustScore = latest?.trust_score ?? 0;
   const value = latest?.value_sum ?? latest?.row_count ?? 0;
   const lastVerified = latest?.started_at ?? m.updated_at;
+
+  // The reconciliation panel must never be empty — users expect to always
+  // see at least the warehouse row. Fall back to the local stub when the
+  // API call failed or returned no rows.
+  const resolvedReconciliation =
+    reconciliation && reconciliation.length > 0
+      ? reconciliation
+      : reconciliationFallback(trustStatus, value);
 
   return {
     id: m.slug,
@@ -239,15 +248,64 @@ function toMetricCard(
     // Prefer the API's real lineage; fall back to a local stub so the UI
     // always renders a graph even when the API is down.
     lineage: lineage ?? stubLineage(m.primary_table, m.name),
-    reconciliation: reconciliationFallback(trustStatus, value),
+    reconciliation: resolvedReconciliation,
     latestRun: latest ? { id: latest.id, status: latest.status } : null,
   };
 }
 
 function reconciliationFallback(status: TrustStatus, value: number): ReconciliationRow[] {
-  // No BI connectors wired yet — show a single "Warehouse (Litmus)" row so the
-  // panel renders and users understand what this surface is for.
+  // Fallback used when the API is unreachable or returned no rows. The live
+  // path (``getReconciliation``) always includes a synthetic warehouse row,
+  // so this is only exercised in demo mode or after a transport failure.
   return [{ source: "Warehouse (Litmus)", value, delta: 0, status }];
+}
+
+interface ReconciliationRowPayload {
+  source: string;
+  value: number;
+  delta: number;
+  status: string;
+  identifier?: string | null;
+  error?: string | null;
+  recorded_at?: string | null;
+}
+
+function prettifySource(source: string): string {
+  if (source === "warehouse") return "Warehouse (Litmus)";
+  if (source === "looker") return "Looker";
+  if (source === "tableau") return "Tableau";
+  // Fallback: capitalize whatever the server sent so new BI tools render
+  // with a sane label until the UI grows an explicit case for them.
+  return source.charAt(0).toUpperCase() + source.slice(1);
+}
+
+/**
+ * Fetch the latest reconciliation rows for a metric.
+ *
+ * The API always includes a synthetic ``"warehouse"`` row at the top, so a
+ * successful fetch is guaranteed to be non-empty. Returns ``null`` only if
+ * the transport itself fails — callers should fall back to the local stub
+ * in that case so the panel still renders.
+ */
+export async function getReconciliation(
+  id: string,
+): Promise<ReconciliationRow[] | null> {
+  const base = apiBase();
+  if (!base) return null;
+  try {
+    const payload = await fetchJson<ReconciliationRowPayload[]>(
+      `${base}/api/v1/metrics/${id}/reconciliation`,
+    );
+    return payload.map((r) => ({
+      source: prettifySource(r.source),
+      value: r.value,
+      delta: r.delta,
+      status: mapStatus(r.status),
+    }));
+  } catch (err) {
+    console.warn(`getReconciliation(${id}): API unreachable:`, err);
+    return null;
+  }
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -296,10 +354,12 @@ export async function getMetric(id: string): Promise<Metric | null> {
   try {
     const payload = await fetchJson<MetricPayload>(`${base}/api/v1/metrics/${id}`);
     const history = await fetchHistory(base, payload.id);
-    // Lineage is best-effort — if the call fails toMetricCard falls back to
-    // the synchronous stub, so the detail page still renders.
+    // Lineage + reconciliation are best-effort — if either call fails,
+    // ``toMetricCard`` falls back to a local stub so the detail page still
+    // renders without a network-dependency-shaped hole in it.
     const lineage = await getLineage(payload.id);
-    return toMetricCard(payload, history, lineage);
+    const reconciliation = await getReconciliation(payload.id);
+    return toMetricCard(payload, history, lineage, reconciliation);
   } catch (err) {
     console.warn(`getMetric(${id}): API unreachable, falling back to fixture:`, err);
     return getFixtureMetric(id);

@@ -254,6 +254,72 @@ class LineageEdge(Base):
     created_at = Column(DateTime, nullable=False, default=_now)
 
 
+class BIMapping(Base):
+    """Links a catalog metric to its equivalent in a BI tool.
+
+    One mapping per (metric, source) pair — enforced by a UNIQUE constraint so
+    the reconciliation job doesn't have to disambiguate. The ``identifier``
+    shape is per-connector (see ``litmus_api/bi/<source>.py`` docstrings); the
+    catalog stores it as opaque text so adding a new BI tool doesn't require
+    a schema change.
+    """
+
+    __tablename__ = "bi_mappings"
+    __table_args__ = (
+        UniqueConstraint("metric_id", "source", name="uq_bi_mappings_metric_source"),
+        Index("ix_bi_mappings_metric", "metric_id"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    metric_id = Column(
+        String(36),
+        ForeignKey("metrics.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # source ∈ {"looker", "tableau"} — validated at the route layer rather than
+    # with a CHECK constraint so the set stays easy to extend.
+    source = Column(String(32), nullable=False)
+    identifier = Column(String(500), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_now)
+
+
+class Reconciliation(Base):
+    """One reconciliation result row: a BI-tool value compared to the latest warehouse run.
+
+    ``delta`` is stored as a proportion (``0.023`` = 2.3% drift) so the UI can
+    render it however it wants without re-multiplying by 100. ``status`` is
+    bucketed from ``|delta|``:
+
+    - ``|delta| < 0.02`` → ``pass``
+    - ``|delta| < 0.10`` → ``warn``
+    - otherwise         → ``fail``
+
+    A connector error is also recorded here with ``status="fail"`` and the
+    exception message in ``error`` — we keep one row per attempt so the UI
+    can always show the most recent state of each source.
+    """
+
+    __tablename__ = "reconciliations"
+    __table_args__ = (
+        Index("ix_reconciliations_metric_time", "metric_id", "recorded_at"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    metric_id = Column(
+        String(36),
+        ForeignKey("metrics.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source = Column(String(32), nullable=False)
+    identifier = Column(String(500), nullable=False)
+    value = Column(Numeric, nullable=True)
+    delta = Column(Numeric, nullable=True)
+    # status ∈ {"pass", "warn", "fail"}.
+    status = Column(String(16), nullable=False)
+    error = Column(Text, nullable=True)
+    recorded_at = Column(DateTime, nullable=False, default=_now)
+
+
 def generate_embed_token() -> str:
     return "lme_" + secrets.token_urlsafe(32)
 
