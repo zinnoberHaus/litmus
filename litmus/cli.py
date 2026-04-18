@@ -684,17 +684,57 @@ def init(
     "--output-dir", "-o", default="metrics",
     help="Directory for generated .metric files.",
 )
-def import_dbt(manifest_path: str, output_dir: str):
-    """Import metric definitions from a dbt manifest.json."""
-    from litmus.generators.dbt_importer import generate_metric_file, import_dbt_manifest
+@click.option(
+    "--push",
+    "push_flag",
+    is_flag=True,
+    default=False,
+    help=(
+        "After writing .metric files, also push each metric's lineage graph"
+        " (extracted from the manifest's parent_map, 3 hops deep) to a"
+        " running Litmus server."
+    ),
+)
+@click.option(
+    "--endpoint",
+    default=None,
+    help="Litmus server URL for --push. Falls back to $LITMUS_ENDPOINT.",
+)
+@click.option(
+    "--api-key",
+    "api_key",
+    default=None,
+    help="API key for --push. Falls back to $LITMUS_API_KEY.",
+)
+def import_dbt(
+    manifest_path: str,
+    output_dir: str,
+    push_flag: bool,
+    endpoint: str | None,
+    api_key: str | None,
+):
+    """Import metric definitions from a dbt manifest.json.
 
-    manifest = Path(manifest_path)
-    if not manifest.exists():
+    With --push, also upserts each metric and its lineage (up to 3 hops
+    upstream through the dbt parent_map) into a running Litmus catalog
+    server. The two-step flow (write files, then push) keeps the local
+    artifacts authoritative — the server is a mirror, never the source.
+    """
+    import json as _json
+
+    from litmus.generators.dbt_importer import (
+        build_lineage,
+        generate_metric_file,
+        import_dbt_manifest,
+    )
+
+    manifest_path_obj = Path(manifest_path)
+    if not manifest_path_obj.exists():
         console.print(f"[red]File not found: {manifest_path}[/red]")
         sys.exit(1)
 
     try:
-        specs = import_dbt_manifest(manifest)
+        specs = import_dbt_manifest(manifest_path_obj)
     except Exception as exc:
         console.print(f"[red]Error reading manifest: {exc}[/red]")
         sys.exit(1)
@@ -709,15 +749,110 @@ def import_dbt(manifest_path: str, output_dir: str):
     console.print(f"\nFound {len(specs)} metrics in dbt manifest.")
     console.print("Generated:")
 
+    # Track file paths per spec name so --push can read them back for the
+    # upsert — we want the original .metric text, not a round-tripped
+    # generate_metric_file output.
+    paths_by_name: dict[str, Path] = {}
     for spec in specs:
         filename = spec.name.lower().replace(" ", "_") + ".metric"
         file_path = out_dir / filename
         file_path.write_text(generate_metric_file(spec))
+        paths_by_name[spec.name] = file_path
         console.print(f"  {file_path}")
 
     console.print()
     console.print("Review and edit each file to add Trust rules and plain-English descriptions.")
     console.print()
+
+    if not push_flag:
+        return
+
+    # --push flow: upsert every metric, then POST its lineage subgraph.
+    from litmus.api_push import PushConfig, PushError, push_lineage, push_results
+
+    push_cfg = PushConfig.from_env(endpoint=endpoint, api_key=api_key)
+    if push_cfg is None:
+        console.print(
+            "[red]--push requires --endpoint or $LITMUS_ENDPOINT.[/red]"
+        )
+        sys.exit(1)
+
+    # Load the manifest once, reuse across metrics.
+    with open(manifest_path_obj) as f:
+        manifest = _json.load(f)
+
+    # Re-parse the freshly written .metric files so upsert sees parseable text.
+    from litmus.checks.runner import CheckSuite
+    from litmus.parser import parse_metric_file
+    from litmus.spec.metric_spec import MetricSpec
+
+    reparsed: list[tuple[MetricSpec, CheckSuite]] = []
+    spec_texts: dict[str, str] = {}
+    for spec in specs:
+        file_path = paths_by_name[spec.name]
+        spec_text = file_path.read_text(encoding="utf-8")
+        try:
+            reparsed_spec = parse_metric_file(file_path)
+        except Exception as exc:
+            console.print(
+                f"[yellow]Skipping push for {spec.name}: "
+                f"generated .metric failed to re-parse ({exc})[/yellow]"
+            )
+            continue
+        spec_texts[reparsed_spec.name] = spec_text
+        reparsed.append((reparsed_spec, CheckSuite(metric_name=reparsed_spec.name)))
+
+    if not reparsed:
+        console.print("[yellow]Nothing to push.[/yellow]")
+        return
+
+    try:
+        metric_ids = push_results(push_cfg, reparsed, spec_texts=spec_texts)
+    except PushError as exc:
+        console.print(f"[red]Push failed: {exc}[/red]")
+        sys.exit(1)
+
+    # Now push lineage for each metric. We need the *dbt* short name to walk
+    # the parent_map — the Litmus display name (e.g. "Total Revenue") won't
+    # match. We recover it from the original manifest lookup.
+    dbt_names_by_spec_name: dict[str, str] = {}
+    for uid, data in (manifest.get("metrics") or {}).items():
+        display = (data.get("label") or data.get("name") or "").replace("_", " ").title()
+        dbt_names_by_spec_name[display] = data.get("name") or uid.split(".")[-1]
+    for uid, node in (manifest.get("nodes") or {}).items():
+        if node.get("resource_type") != "model":
+            continue
+        short = node.get("name", "")
+        display = short.replace("_", " ").title()
+        dbt_names_by_spec_name.setdefault(display, short)
+
+    pushed = 0
+    for (spec_obj, _), metric_id in zip(reparsed, metric_ids):
+        dbt_name = dbt_names_by_spec_name.get(spec_obj.name)
+        if dbt_name is None:
+            continue
+        lineage = build_lineage(manifest, dbt_name)
+        if not lineage.nodes:
+            continue
+        nodes_payload = [
+            {"id": n.id, "label": n.label, "kind": n.kind}
+            for n in lineage.nodes
+        ]
+        edges_payload = [
+            {"from": e.from_id, "to": e.to_id} for e in lineage.edges
+        ]
+        try:
+            push_lineage(push_cfg, metric_id, nodes_payload, edges_payload)
+            pushed += 1
+        except PushError as exc:
+            console.print(
+                f"[yellow]Lineage push failed for {spec_obj.name}: {exc}[/yellow]"
+            )
+
+    console.print(
+        f"[dim]Pushed {len(metric_ids)} metric(s) and "
+        f"{pushed} lineage graph(s) to {push_cfg.endpoint}[/dim]"
+    )
 
 
 # ── litmus share ────────────────────────────────────────────────────

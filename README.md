@@ -161,6 +161,19 @@ jobs:
 
 The composite action is defined in [`action.yml`](action.yml). Inputs: `path` (required), `config`, `extras` (e.g. `postgres,snowflake`), `fail-on-warning`, `litmus-version`. Outputs: `report-json`, `trust-score`, `summary-markdown`. An annotated copy of this workflow lives at [`.github/workflows/litmus-check.example.yml`](.github/workflows/litmus-check.example.yml).
 
+### GitHub integration
+
+If you're running a Litmus catalog server, point a GitHub webhook at `POST <your-server>/webhooks/github` and every push that touches a `.metric` file will upsert it into the catalog automatically — no CI job required.
+
+```
+Payload URL:   https://litmus.example.com/webhooks/github
+Content type:  application/json
+Secret:        <a random string you also set as LITMUS_GITHUB_WEBHOOK_SECRET on the server>
+Events:        Just the push event
+```
+
+The webhook only fetches from public repos (it uses `raw.githubusercontent.com`). Full setup walkthrough: [`docs/github-webhook.md`](docs/github-webhook.md).
+
 ## How it fits with dbt and semantic layers
 
 Litmus is a **trust / contract layer**, not a replacement for your transformation or semantic tools. dbt and Cube / LookML / MetricFlow answer *"how is this metric computed?"* — Litmus answers *"is the metric currently trustworthy, and did the business sign off on its definition?"* `litmus import-dbt` seeds specs from an existing dbt project, and `litmus export --to dbt` emits dbt singular tests so the same rules can run inside a dbt CI pipeline. The two stacks are designed to sit side by side.

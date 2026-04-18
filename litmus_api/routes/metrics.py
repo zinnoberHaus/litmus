@@ -13,6 +13,8 @@ from litmus.parser.parser import parse_metric_string
 from litmus_api.deps import current_org, db_session
 from litmus_api.models import (
     EmbedKey,
+    LineageEdge,
+    LineageNode,
     Metric,
     MetricRevision,
     Org,
@@ -152,16 +154,25 @@ def list_metrics(
     return out
 
 
-@router.post("/metrics", response_model=MetricOut, status_code=status.HTTP_201_CREATED)
-def upsert_metric(
+def _perform_upsert(
+    session: Session,
+    org: Org,
     payload: MetricUpsertIn,
-    org: Org = Depends(current_org),
-    session: Session = Depends(db_session),
-) -> MetricOut:
-    try:
-        spec = parse_metric_string(payload.spec_text)
-    except LitmusParseError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+) -> Metric:
+    """Parse ``payload.spec_text`` and upsert a :class:`Metric` for ``org``.
+
+    This is the shared core used by both the HTTP route (``POST /metrics``)
+    and the GitHub webhook ingestor — keeping the upsert logic in one place
+    means a ``.metric`` edit lands the same way whether it came in via the
+    CLI push or via a ``git push``. The caller is responsible for committing
+    (the HTTP route commits once per request; the webhook commits once per
+    push event after it has processed every changed file).
+
+    Raises :class:`LitmusParseError` if ``spec_text`` cannot be parsed — the
+    caller decides whether that is a 422 (HTTP) or an ``ignored`` entry in
+    the webhook response.
+    """
+    spec = parse_metric_string(payload.spec_text)
 
     slug = (payload.slug or slugify(spec.name)).lower()
     existing = (
@@ -210,6 +221,20 @@ def upsert_metric(
         _record_revision(session, metric, payload, spec_dict, force=False)
 
     session.flush()
+    return metric
+
+
+@router.post("/metrics", response_model=MetricOut, status_code=status.HTTP_201_CREATED)
+def upsert_metric(
+    payload: MetricUpsertIn,
+    org: Org = Depends(current_org),
+    session: Session = Depends(db_session),
+) -> MetricOut:
+    try:
+        metric = _perform_upsert(session, org, payload)
+    except LitmusParseError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
     out = _to_out(session, metric)
     session.commit()
     return out
@@ -362,3 +387,191 @@ def list_revisions(
         )
         for rev in revisions
     ]
+
+
+# ── Lineage ────────────────────────────────────────────────────────────
+
+
+class LineageNodeIn(BaseModel):
+    """Incoming node payload. ``id`` is the client-supplied graph key
+    (e.g. a dbt unique_id) used to wire edges; it is *not* the DB row id."""
+
+    id: str
+    label: str
+    kind: str  # "source" | "model" | "metric"
+
+
+class LineageEdgeIn(BaseModel):
+    """Accept ``{"from": ..., "to": ...}`` — the idiomatic graph shape —
+    while avoiding Python's ``from`` keyword collision via alias."""
+
+    from_: str = Field(alias="from")
+    to: str
+
+    model_config = {"populate_by_name": True}
+
+
+class LineageIn(BaseModel):
+    nodes: list[LineageNodeIn] = Field(default_factory=list)
+    edges: list[LineageEdgeIn] = Field(default_factory=list)
+
+
+class LineageNodeOut(BaseModel):
+    id: str
+    label: str
+    kind: str
+
+
+class LineageOut(BaseModel):
+    """We serialize edges as plain dicts so the wire format is exactly
+    ``{"from": ..., "to": ...}`` without Pydantic alias gymnastics on
+    response serialization."""
+
+    nodes: list[LineageNodeOut]
+    edges: list[dict[str, str]]
+
+
+_ALLOWED_KINDS = {"source", "model", "metric"}
+
+
+def _resolve_metric(
+    session: Session, org: Org, metric_id: str
+) -> Metric:
+    """Look up a metric by UUID or slug, filtered to ``org``."""
+    metric = (
+        session.query(Metric)
+        .filter_by(id=metric_id, org_id=org.id, deleted_at=None)
+        .one_or_none()
+    )
+    if metric is None:
+        metric = (
+            session.query(Metric)
+            .filter_by(slug=metric_id, org_id=org.id, deleted_at=None)
+            .one_or_none()
+        )
+    if metric is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "metric not found")
+    return metric
+
+
+@router.post("/metrics/{metric_id}/lineage", response_model=LineageOut)
+def upsert_lineage(
+    metric_id: str,
+    payload: LineageIn,
+    org: Org = Depends(current_org),
+    session: Session = Depends(db_session),
+) -> LineageOut:
+    """Replace a metric's lineage subgraph atomically.
+
+    We delete existing nodes + edges first (cascade cleans edges when a node
+    goes) then re-insert. This keeps ``litmus import-dbt --push`` idempotent
+    — running it twice produces the same graph, not a doubled one.
+    """
+    metric = _resolve_metric(session, org, metric_id)
+
+    # Validate up front so a bad kind doesn't half-write the graph.
+    for node in payload.nodes:
+        if node.kind not in _ALLOWED_KINDS:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"invalid kind {node.kind!r} (allowed: {sorted(_ALLOWED_KINDS)})",
+            )
+
+    client_ids = {n.id for n in payload.nodes}
+    for edge in payload.edges:
+        if edge.from_ not in client_ids or edge.to not in client_ids:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "edge references a node that is not in the payload",
+            )
+
+    # Wipe the existing subgraph. Edges first (FK to nodes, cascade handles
+    # this too but being explicit keeps the intent obvious).
+    session.query(LineageEdge).filter_by(metric_id=metric.id).delete()
+    session.query(LineageNode).filter_by(metric_id=metric.id).delete()
+    session.flush()
+
+    # Insert nodes, keeping a client_id → db_id map so we can wire edges.
+    id_map: dict[str, str] = {}
+    for node in payload.nodes:
+        row = LineageNode(
+            metric_id=metric.id,
+            label=node.label,
+            kind=node.kind,
+        )
+        session.add(row)
+        session.flush()
+        id_map[node.id] = row.id
+
+    for edge in payload.edges:
+        session.add(
+            LineageEdge(
+                metric_id=metric.id,
+                from_node_id=id_map[edge.from_],
+                to_node_id=id_map[edge.to],
+            )
+        )
+    session.flush()
+    session.commit()
+
+    # Round-trip back through the DB so the response shape matches GET.
+    return _load_lineage(session, metric)
+
+
+@router.get("/metrics/{metric_id}/lineage", response_model=LineageOut)
+def get_lineage(
+    metric_id: str,
+    org: Org = Depends(current_org),
+    session: Session = Depends(db_session),
+) -> LineageOut:
+    """Return the stored lineage for a metric, or a 2-node spec-derived stub
+    if nothing has been imported yet.
+
+    The stub keeps the UI happy — an empty lineage block on the detail page
+    looks broken; a ``source → metric`` placeholder communicates "lineage
+    hasn't been wired yet" without rendering a blank rectangle.
+    """
+    metric = _resolve_metric(session, org, metric_id)
+    out = _load_lineage(session, metric)
+    if out.nodes:
+        return out
+
+    primary = metric.primary_table or "source_table"
+    return LineageOut(
+        nodes=[
+            LineageNodeOut(id="src", label=primary, kind="source"),
+            LineageNodeOut(id="metric", label=metric.name, kind="metric"),
+        ],
+        edges=[{"from": "src", "to": "metric"}],
+    )
+
+
+def _load_lineage(session: Session, metric: Metric) -> LineageOut:
+    """Pull the stored subgraph out of the DB and reshape it for the API.
+
+    We expose the node's DB row id as the public ``id`` — edges reference
+    node ids, so whatever the client sees on GET must round-trip through
+    POST unchanged.
+    """
+    nodes = (
+        session.query(LineageNode)
+        .filter_by(metric_id=metric.id)
+        .order_by(LineageNode.created_at, LineageNode.id)
+        .all()
+    )
+    edges = (
+        session.query(LineageEdge)
+        .filter_by(metric_id=metric.id)
+        .order_by(LineageEdge.created_at, LineageEdge.id)
+        .all()
+    )
+    return LineageOut(
+        nodes=[
+            LineageNodeOut(id=n.id, label=n.label, kind=n.kind)
+            for n in nodes
+        ],
+        edges=[
+            {"from": e.from_node_id, "to": e.to_node_id}
+            for e in edges
+        ],
+    )

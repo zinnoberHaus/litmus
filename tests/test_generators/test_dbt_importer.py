@@ -206,3 +206,146 @@ class TestGenerateMetricFile:
         specs = import_dbt_manifest(manifest_with_metrics)
         output = generate_metric_file(specs[0])
         assert 'The result is "Total Revenue"' in output
+
+
+# ---------------------------------------------------------------------------
+# build_lineage tests
+# ---------------------------------------------------------------------------
+
+
+_LINEAGE_MANIFEST = {
+    "metrics": {
+        "metric.project.total_revenue": {
+            "name": "total_revenue",
+            "label": "Total Revenue",
+            "description": "",
+        }
+    },
+    "nodes": {
+        "model.project.fct_orders": {
+            "resource_type": "model",
+            "name": "fct_orders",
+        },
+        "model.project.stg_orders": {
+            "resource_type": "model",
+            "name": "stg_orders",
+        },
+        "model.project.stg_payments": {
+            "resource_type": "model",
+            "name": "stg_payments",
+        },
+    },
+    "sources": {
+        "source.project.raw.orders": {
+            "name": "orders",
+            "identifier": "orders",
+        },
+        "source.project.raw.payments": {
+            "name": "payments",
+            "identifier": "payments",
+        },
+    },
+    # parent_map: child -> [parents]
+    "parent_map": {
+        "metric.project.total_revenue": ["model.project.fct_orders"],
+        "model.project.fct_orders": [
+            "model.project.stg_orders",
+            "model.project.stg_payments",
+        ],
+        "model.project.stg_orders": ["source.project.raw.orders"],
+        "model.project.stg_payments": ["source.project.raw.payments"],
+        "source.project.raw.orders": [],
+        "source.project.raw.payments": [],
+    },
+}
+
+
+class TestBuildLineage:
+    def test_walks_up_to_three_hops(self):
+        from litmus.generators.dbt_importer import build_lineage
+
+        lineage = build_lineage(_LINEAGE_MANIFEST, "total_revenue")
+        labels = {n.label for n in lineage.nodes}
+        # 3 hops up: metric → fct_orders → stg_* → source.raw.*
+        assert "Total Revenue" in labels
+        assert "fct_orders" in labels
+        assert "stg_orders" in labels
+        assert "stg_payments" in labels
+        assert "orders" in labels
+        assert "payments" in labels
+
+    def test_source_nodes_have_source_kind(self):
+        from litmus.generators.dbt_importer import build_lineage
+
+        lineage = build_lineage(_LINEAGE_MANIFEST, "total_revenue")
+        kinds = {n.label: n.kind for n in lineage.nodes}
+        assert kinds["orders"] == "source"
+        assert kinds["payments"] == "source"
+
+    def test_intermediate_nodes_have_model_kind(self):
+        from litmus.generators.dbt_importer import build_lineage
+
+        lineage = build_lineage(_LINEAGE_MANIFEST, "total_revenue")
+        kinds = {n.label: n.kind for n in lineage.nodes}
+        assert kinds["fct_orders"] == "model"
+        assert kinds["stg_orders"] == "model"
+
+    def test_metric_terminal_node_always_present(self):
+        from litmus.generators.dbt_importer import build_lineage
+
+        lineage = build_lineage(_LINEAGE_MANIFEST, "total_revenue")
+        metric_nodes = [n for n in lineage.nodes if n.kind == "metric"]
+        assert len(metric_nodes) == 1
+        assert metric_nodes[0].label == "Total Revenue"
+
+    def test_edges_flow_source_to_metric(self):
+        from litmus.generators.dbt_importer import build_lineage
+
+        lineage = build_lineage(_LINEAGE_MANIFEST, "total_revenue")
+        node_ids = {n.id for n in lineage.nodes}
+        # Every edge must reference nodes we actually returned.
+        for edge in lineage.edges:
+            assert edge.from_id in node_ids
+            assert edge.to_id in node_ids
+
+    def test_unknown_metric_returns_degenerate_graph(self):
+        from litmus.generators.dbt_importer import build_lineage
+
+        lineage = build_lineage(_LINEAGE_MANIFEST, "not_a_real_metric")
+        # Metric we can't resolve still gets a terminal node so the UI
+        # doesn't see an empty graph.
+        assert len(lineage.nodes) == 1
+        assert lineage.nodes[0].kind == "metric"
+        assert lineage.edges == []
+
+    def test_depth_cap_truncates_deep_chains(self):
+        from litmus.generators.dbt_importer import build_lineage
+
+        # Construct a 5-hop chain; we should see at most 3 hops from the start.
+        manifest = {
+            "metrics": {},
+            "nodes": {
+                "model.p.a": {"resource_type": "model", "name": "a"},
+                "model.p.b": {"resource_type": "model", "name": "b"},
+                "model.p.c": {"resource_type": "model", "name": "c"},
+                "model.p.d": {"resource_type": "model", "name": "d"},
+                "model.p.e": {"resource_type": "model", "name": "e"},
+            },
+            "sources": {},
+            "parent_map": {
+                "model.p.a": ["model.p.b"],
+                "model.p.b": ["model.p.c"],
+                "model.p.c": ["model.p.d"],
+                "model.p.d": ["model.p.e"],
+                "model.p.e": [],
+            },
+        }
+        lineage = build_lineage(manifest, "a")
+        labels = {n.label for n in lineage.nodes}
+        # Start is "a" (model), plus metric terminal, plus 3 hops up:
+        # a, b, c, d. "e" is 4 hops up and must be truncated.
+        assert "a" in labels
+        assert "b" in labels
+        assert "c" in labels
+        assert "d" in labels
+        assert "e" not in labels

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from litmus.spec.metric_spec import (
     ChangeRule,
@@ -13,6 +15,139 @@ from litmus.spec.metric_spec import (
     TrustSpec,
     VolumeRule,
 )
+
+# ---------------------------------------------------------------------------
+# Lineage extraction
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LineageNodeSpec:
+    """One node in a metric's lineage graph, as extracted from dbt.
+
+    ``id`` is the dbt unique_id when available (``model.project.orders``) or
+    a synthetic ``metric:<name>`` / ``source:<table>`` string otherwise.
+    ``kind`` matches the API contract: ``"source"`` | ``"model"`` | ``"metric"``.
+    """
+
+    id: str
+    label: str
+    kind: str
+
+
+@dataclass
+class LineageEdgeSpec:
+    """Directed edge: ``from_id`` → ``to_id``. Both ids must appear in nodes."""
+
+    from_id: str
+    to_id: str
+
+
+@dataclass
+class Lineage:
+    nodes: list[LineageNodeSpec] = field(default_factory=list)
+    edges: list[LineageEdgeSpec] = field(default_factory=list)
+
+
+_MAX_LINEAGE_HOPS = 3
+
+
+def _dbt_unique_id_to_node(unique_id: str, manifest: dict[str, Any]) -> LineageNodeSpec:
+    """Resolve a dbt ``unique_id`` (e.g. ``model.project.orders``) to a lineage node.
+
+    The kind comes from the prefix — ``source.*`` becomes ``"source"``, anything
+    else (models, seeds, snapshots) becomes ``"model"``. The label is the short
+    name so the UI shows ``orders`` rather than ``model.project.orders``.
+    """
+    nodes = manifest.get("nodes", {})
+    sources = manifest.get("sources", {})
+
+    if unique_id.startswith("source."):
+        data = sources.get(unique_id, {})
+        label = data.get("name") or data.get("identifier") or unique_id.split(".")[-1]
+        return LineageNodeSpec(id=unique_id, label=label, kind="source")
+
+    data = nodes.get(unique_id, {})
+    label = data.get("name") or unique_id.split(".")[-1]
+    return LineageNodeSpec(id=unique_id, label=label, kind="model")
+
+
+def build_lineage(manifest: dict[str, Any], metric_name: str) -> Lineage:
+    """Walk the manifest's ``parent_map`` up to 3 hops and return the subgraph.
+
+    ``metric_name`` is the short dbt metric name (``total_revenue``), not the
+    Litmus display name. We accept either the dbt metrics-section name or a
+    model name — fallback lookup walks both.
+
+    The returned graph always includes a synthetic terminal node
+    ``metric:<name>`` so the UI can render the metric as the "leaf" regardless
+    of whether the underlying dbt object is a metric or a model.
+    """
+    parent_map: dict[str, list[str]] = manifest.get("parent_map", {}) or {}
+    metrics_section: dict[str, Any] = manifest.get("metrics", {}) or {}
+    nodes_section: dict[str, Any] = manifest.get("nodes", {}) or {}
+
+    # Resolve the starting dbt unique_id for this metric. Try the metrics
+    # section first (dbt ≥ 1.6), then fall back to a model named the same.
+    start_unique_id: str | None = None
+    start_display: str = metric_name
+    for uid, data in metrics_section.items():
+        if data.get("name") == metric_name or data.get("label") == metric_name:
+            start_unique_id = uid
+            start_display = data.get("label") or data.get("name") or metric_name
+            break
+    if start_unique_id is None:
+        for uid, data in nodes_section.items():
+            if (
+                data.get("resource_type") == "model"
+                and data.get("name") == metric_name
+            ):
+                start_unique_id = uid
+                start_display = data.get("name") or metric_name
+                break
+
+    # Always create the metric terminal node. If we can't resolve the start in
+    # the manifest, we still return a degenerate graph (just the metric node)
+    # — empty is never the right answer for lineage.
+    metric_node = LineageNodeSpec(
+        id=f"metric:{metric_name}",
+        label=start_display,
+        kind="metric",
+    )
+
+    if start_unique_id is None:
+        return Lineage(nodes=[metric_node], edges=[])
+
+    # BFS up the parent_map for up to _MAX_LINEAGE_HOPS hops. We record edges
+    # pointing *downstream* (parent → child) which is the natural reading
+    # direction for lineage (source flows into metric).
+    nodes_by_id: dict[str, LineageNodeSpec] = {}
+    edges: list[LineageEdgeSpec] = []
+    frontier: list[tuple[str, int]] = [(start_unique_id, 0)]
+    seen: set[str] = {start_unique_id}
+
+    # The start node itself (either the dbt metric or the dbt model) gets
+    # resolved first so it has a real label.
+    nodes_by_id[start_unique_id] = _dbt_unique_id_to_node(start_unique_id, manifest)
+
+    while frontier:
+        current_id, depth = frontier.pop(0)
+        if depth >= _MAX_LINEAGE_HOPS:
+            continue
+        for parent_id in parent_map.get(current_id, []) or []:
+            if parent_id not in nodes_by_id:
+                nodes_by_id[parent_id] = _dbt_unique_id_to_node(parent_id, manifest)
+            edges.append(LineageEdgeSpec(from_id=parent_id, to_id=current_id))
+            if parent_id not in seen:
+                seen.add(parent_id)
+                frontier.append((parent_id, depth + 1))
+
+    # Finally, connect the resolved start node to the synthetic metric node so
+    # the UI always sees a "metric" leaf at the end.
+    edges.append(LineageEdgeSpec(from_id=start_unique_id, to_id=metric_node.id))
+
+    all_nodes = list(nodes_by_id.values()) + [metric_node]
+    return Lineage(nodes=all_nodes, edges=edges)
 
 
 def import_dbt_manifest(manifest_path: str | Path) -> list[MetricSpec]:

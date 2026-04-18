@@ -159,3 +159,23 @@ def read_spec_texts(
             if name in text:
                 out[name] = text
     return out
+
+
+def push_lineage(
+    cfg: PushConfig,
+    metric_ref: str,
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """POST a nodes+edges graph to ``/api/v1/metrics/{ref}/lineage``.
+
+    ``metric_ref`` can be either the metric's UUID or its slug — the API
+    accepts both. Reuses the same stdlib-urllib transport as :func:`_request`
+    so ``litmus import-dbt --push`` stays zero-dependency.
+    """
+    return _request(
+        cfg,
+        "POST",
+        f"/api/v1/metrics/{metric_ref}/lineage",
+        {"nodes": nodes, "edges": edges},
+    )

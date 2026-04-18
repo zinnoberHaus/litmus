@@ -128,8 +128,9 @@ function stubLineage(primaryTable: string | null, metricName: string): {
   nodes: LineageNode[];
   edges: LineageEdge[];
 } {
-  // Until the dbt-manifest ingestor lands, render a minimal lineage stub
-  // so the detail page still shows a graph instead of an empty block.
+  // Fallback used when the API is unreachable or lineage hasn't been
+  // imported yet. The API itself also returns a 2-node stub for metrics
+  // without a real graph, so the UI renders consistently in both modes.
   const source = primaryTable ?? "source_table";
   return {
     nodes: [
@@ -140,7 +141,70 @@ function stubLineage(primaryTable: string | null, metricName: string): {
   };
 }
 
-function toMetricCard(m: MetricPayload, history: TrustHistoryPoint[]): Metric {
+interface LineageNodePayload {
+  id: string;
+  label: string;
+  // API emits "source" | "model" | "metric" — we widen to the UI's local
+  // type which still includes "transform" for legacy fixtures.
+  kind: string;
+}
+
+interface LineageEdgePayload {
+  from: string;
+  to: string;
+}
+
+interface LineagePayload {
+  nodes: LineageNodePayload[];
+  edges: LineageEdgePayload[];
+}
+
+function mapLineageKind(kind: string): LineageNode["kind"] {
+  if (kind === "source" || kind === "metric" || kind === "transform") {
+    return kind;
+  }
+  // The server emits "model" for intermediate dbt nodes; the UI's
+  // existing fixtures use "transform" for the same idea. Map so the
+  // graph component renders without a new case.
+  if (kind === "model") return "transform";
+  return "transform";
+}
+
+/**
+ * Fetch the lineage subgraph for a metric from the Python API.
+ *
+ * The API always returns at least a 2-node stub (source → metric), so
+ * callers never need to handle an empty graph — they still get a placeholder
+ * that renders cleanly. Returns ``null`` only if the API is unreachable.
+ */
+export async function getLineage(
+  id: string,
+): Promise<{ nodes: LineageNode[]; edges: LineageEdge[] } | null> {
+  const base = apiBase();
+  if (!base) return null;
+  try {
+    const payload = await fetchJson<LineagePayload>(
+      `${base}/api/v1/metrics/${id}/lineage`,
+    );
+    return {
+      nodes: payload.nodes.map((n) => ({
+        id: n.id,
+        label: n.label,
+        kind: mapLineageKind(n.kind),
+      })),
+      edges: payload.edges.map((e) => ({ from: e.from, to: e.to })),
+    };
+  } catch (err) {
+    console.warn(`getLineage(${id}): API unreachable:`, err);
+    return null;
+  }
+}
+
+function toMetricCard(
+  m: MetricPayload,
+  history: TrustHistoryPoint[],
+  lineage?: { nodes: LineageNode[]; edges: LineageEdge[] } | null,
+): Metric {
   const spec = m.spec ?? {};
   const sources = (spec["sources"] as string[] | undefined) ?? [];
   const calculations = (spec["calculations"] as string[] | undefined) ?? [];
@@ -172,7 +236,9 @@ function toMetricCard(m: MetricPayload, history: TrustHistoryPoint[]): Metric {
     },
     trustRules: describeTrustRules(spec),
     history,
-    lineage: stubLineage(m.primary_table, m.name),
+    // Prefer the API's real lineage; fall back to a local stub so the UI
+    // always renders a graph even when the API is down.
+    lineage: lineage ?? stubLineage(m.primary_table, m.name),
     reconciliation: reconciliationFallback(trustStatus, value),
     latestRun: latest ? { id: latest.id, status: latest.status } : null,
   };
@@ -230,7 +296,10 @@ export async function getMetric(id: string): Promise<Metric | null> {
   try {
     const payload = await fetchJson<MetricPayload>(`${base}/api/v1/metrics/${id}`);
     const history = await fetchHistory(base, payload.id);
-    return toMetricCard(payload, history);
+    // Lineage is best-effort — if the call fails toMetricCard falls back to
+    // the synchronous stub, so the detail page still renders.
+    const lineage = await getLineage(payload.id);
+    return toMetricCard(payload, history, lineage);
   } catch (err) {
     console.warn(`getMetric(${id}): API unreachable, falling back to fixture:`, err);
     return getFixtureMetric(id);

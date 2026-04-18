@@ -122,6 +122,19 @@ LITMUS_AUTO_MIGRATE=true uvicorn litmus_api.main:app
 - `MetricRevision` is append-only. `POST /api/v1/metrics` writes a new revision only when the submitted `spec_text` differs from the latest stored revision — identical re-upserts (common in CI) are deduped. `GET /api/v1/metrics/{id}/revisions` returns up to 30 entries, **oldest-last** so clients can render a top-to-bottom timeline without reversing. `MetricOut.revision_count` reflects the total on every response.
 - `tests/test_api/conftest.py` deliberately skips Alembic — it calls `Base.metadata.create_all` directly so each test gets a fresh DB in milliseconds. `tests/test_api/test_migrations.py` locks in the invariant that `alembic upgrade head` and `create_all` produce identical schemas.
 
+#### Webhook ingestion
+
+`POST /webhooks/github` (mounted at the root, not under `/api/v1`) accepts GitHub `push` events and upserts any added/modified `.metric` files into the catalog. The route verifies `X-Hub-Signature-256` against `LITMUS_GITHUB_WEBHOOK_SECRET` (env var, required — an unset secret returns 401, never silently accepts). Non-`push` events return `{"status":"ignored"}`. Files are fetched from `raw.githubusercontent.com` using stdlib `urllib.request`, so the feature works only for **public repos** — private repos would need a GitHub App OAuth flow which the OSS wedge deliberately does not ship. Setup steps live in `docs/github-webhook.md`. Both the HTTP route (`POST /api/v1/metrics`) and the webhook share `_perform_upsert(session, org, payload)` in `litmus_api/routes/metrics.py`, so a `.metric` edit lands the same way whether it came in via `litmus check --push` or a `git push`.
+
+#### dbt lineage
+
+Two endpoints on `/api/v1/metrics/{id}/lineage`:
+
+- **POST** `{nodes, edges}` replaces the stored subgraph atomically (delete + re-insert), keeping `litmus import-dbt --push` idempotent. Node kinds are `"source" | "model" | "metric"`.
+- **GET** returns the stored graph, or a 2-node spec-derived stub (`source.primary_table → metric.name`) when nothing has been imported yet, so the UI never renders an empty lineage block.
+
+`litmus/generators/dbt_importer.py::build_lineage(manifest, metric_name)` walks the manifest's `parent_map` up to **3 hops** upstream and returns a `Lineage(nodes, edges)` dataclass. The CLI's `litmus import-dbt --push --endpoint <url> [--api-key ...]` flow writes local `.metric` files first (authoritative), then upserts each metric and POSTs its lineage to the server. The transport reuses `litmus/api_push.py`'s stdlib-urllib helper, so `import-dbt` stays zero-dependency.
+
 ### AI run explanations (`litmus_api/ai/`)
 
 Optional, opt-in-per-install feature for the hosted server. `litmus_api/ai/explain.py` exposes `explain_run(session, run_id)` which asks Claude Sonnet 4.6 for a one-paragraph hypothesis + suggested action when a run fails or errors. Uses the `anthropic` SDK (gated behind the `[ai]` extras — not pulled into `[server]`), forced tool-use for a hard output contract, and upserts a `RunExplanation` row so repeat reads are free. The feature is triggered exclusively by `POST /api/v1/runs/{id}/explain` (CLI: `litmus explain-run <id> --endpoint ...`); it never runs on ingestion and never explains passed/warning runs. **Privacy disclosure:** the prompt includes metric metadata, trust rules, current `CheckResult` rows, and the last 5 runs' aggregates — never raw warehouse rows or SQL. Full details in `docs/ai-explanations.md`. If `LITMUS_ANTHROPIC_API_KEY` (or `ANTHROPIC_API_KEY`) is unset, the route returns 500 "not configured" and the UI gracefully shows a muted fallback instead of a crash.

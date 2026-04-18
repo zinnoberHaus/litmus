@@ -200,6 +200,60 @@ class EmbedKey(Base):
     metric = relationship("Metric", back_populates="embed_keys")
 
 
+class LineageNode(Base):
+    """One node in a metric's lineage graph (a source table, an intermediate
+    dbt model, or the metric itself).
+
+    Edges are intra-metric only — we deliberately don't join lineage across
+    metrics in the catalog. Each metric owns its own subgraph so deleting a
+    metric deletes its lineage without ripple effects.
+    """
+
+    __tablename__ = "lineage_nodes"
+    __table_args__ = (
+        Index("ix_lineage_nodes_metric", "metric_id"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    metric_id = Column(
+        String(36),
+        ForeignKey("metrics.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    label = Column(String(500), nullable=False)
+    # kind ∈ {"source", "model", "metric"} — validated at the route layer
+    # rather than with a CHECK constraint so the set stays easy to extend.
+    kind = Column(String(32), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_now)
+
+
+class LineageEdge(Base):
+    """A directed edge in a metric's lineage graph (from upstream to downstream)."""
+
+    __tablename__ = "lineage_edges"
+    __table_args__ = (
+        Index("ix_lineage_edges_metric", "metric_id"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    metric_id = Column(
+        String(36),
+        ForeignKey("metrics.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    from_node_id = Column(
+        String(36),
+        ForeignKey("lineage_nodes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    to_node_id = Column(
+        String(36),
+        ForeignKey("lineage_nodes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at = Column(DateTime, nullable=False, default=_now)
+
+
 def generate_embed_token() -> str:
     return "lme_" + secrets.token_urlsafe(32)
 
