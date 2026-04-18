@@ -102,6 +102,26 @@ Single-file Click app with subcommands `init`, `check`, `parse`, `explain`, `exp
 
 Exit code contract: `litmus check` exits `1` if **any** suite has `failed > 0` or `errors > 0`; warnings alone don't fail the run. The reusable GitHub Action (`action.yml`) layers an optional `fail-on-warning` flag on top — if you change the exit-code contract, update the action too.
 
+### 6. `litmus_api/` — FastAPI catalog + embeddable badges (v0.2 wedge)
+
+Separate package next to `litmus/`. Provides the hosted metric catalog, run history, and embeddable trust-badge SVG that the CLI can push to. Install with the `[server]` extras.
+
+Schema is managed by **Alembic**, not `create_all`:
+
+```bash
+# Prod / shared DBs: run migrations explicitly before the server starts
+alembic -c litmus_api/migrations/alembic.ini upgrade head
+
+# Dev convenience: auto-apply on app startup
+LITMUS_AUTO_MIGRATE=true uvicorn litmus_api.main:app
+```
+
+- `litmus_api/main.py::init_schema()` — precedence is (1) in-memory SQLite → `create_all` (tests only), (2) `LITMUS_AUTO_MIGRATE=true` → `alembic upgrade head`, (3) default → do nothing (ops run migrations as a separate deploy step).
+- `litmus_api/migrations/` — `alembic.ini`, `env.py` (reads URL from `Settings().database_url`), and `versions/0001_initial_schema.py`, `versions/0002_metric_revisions.py`. Use `alembic revision --autogenerate -m "..."` to generate new migrations; **review the output** — autogenerate misses ENUM changes, CHECK constraints, and index renames.
+- Models (`litmus_api/models/__init__.py`): `Org`, `ApiKey`, `Metric`, `MetricRevision`, `Run`, `CheckResult`, `RunExplanation`, `EmbedKey`.
+- `MetricRevision` is append-only. `POST /api/v1/metrics` writes a new revision only when the submitted `spec_text` differs from the latest stored revision — identical re-upserts (common in CI) are deduped. `GET /api/v1/metrics/{id}/revisions` returns up to 30 entries, **oldest-last** so clients can render a top-to-bottom timeline without reversing. `MetricOut.revision_count` reflects the total on every response.
+- `tests/test_api/conftest.py` deliberately skips Alembic — it calls `Base.metadata.create_all` directly so each test gets a fresh DB in milliseconds. `tests/test_api/test_migrations.py` locks in the invariant that `alembic upgrade head` and `create_all` produce identical schemas.
+
 ### AI run explanations (`litmus_api/ai/`)
 
 Optional, opt-in-per-install feature for the hosted server. `litmus_api/ai/explain.py` exposes `explain_run(session, run_id)` which asks Claude Sonnet 4.6 for a one-paragraph hypothesis + suggested action when a run fails or errors. Uses the `anthropic` SDK (gated behind the `[ai]` extras — not pulled into `[server]`), forced tool-use for a hard output contract, and upserts a `RunExplanation` row so repeat reads are free. The feature is triggered exclusively by `POST /api/v1/runs/{id}/explain` (CLI: `litmus explain-run <id> --endpoint ...`); it never runs on ingestion and never explains passed/warning runs. **Privacy disclosure:** the prompt includes metric metadata, trust rules, current `CheckResult` rows, and the last 5 runs' aggregates — never raw warehouse rows or SQL. Full details in `docs/ai-explanations.md`. If `LITMUS_ANTHROPIC_API_KEY` (or `ANTHROPIC_API_KEY`) is unset, the route returns 500 "not configured" and the UI gracefully shows a muted fallback instead of a crash.

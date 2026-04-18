@@ -77,6 +77,36 @@ class Metric(Base):
 
     runs = relationship("Run", back_populates="metric", cascade="all, delete-orphan")
     embed_keys = relationship("EmbedKey", back_populates="metric", cascade="all, delete-orphan")
+    revisions = relationship(
+        "MetricRevision", back_populates="metric", cascade="all, delete-orphan"
+    )
+
+
+class MetricRevision(Base):
+    """Append-only log of metric spec changes.
+
+    One row is written every time a metric's ``spec_text`` actually changes
+    on upsert — identical re-upserts are deduped. This is what powers the
+    ``GET /api/v1/metrics/{id}/revisions`` endpoint so owners can see how a
+    definition evolved (and correlate a trust regression to a spec edit).
+    """
+
+    __tablename__ = "metric_revisions"
+    __table_args__ = (
+        Index("ix_metric_revisions_metric_time", "metric_id", "created_at"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    metric_id = Column(
+        String(36), ForeignKey("metrics.id", ondelete="CASCADE"), nullable=False
+    )
+    spec_text = Column(Text, nullable=False)
+    spec_json = Column(JSON, nullable=False)
+    source_sha = Column(String(64))
+    author = Column(String(320))
+    created_at = Column(DateTime, nullable=False, default=_now)
+
+    metric = relationship("Metric", back_populates="revisions")
 
 
 class Run(Base):

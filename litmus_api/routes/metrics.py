@@ -5,13 +5,20 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from litmus.parser.errors import LitmusParseError
 from litmus.parser.parser import parse_metric_string
 from litmus_api.deps import current_org, db_session
-from litmus_api.models import EmbedKey, Metric, Org, Run, generate_embed_token
+from litmus_api.models import (
+    EmbedKey,
+    Metric,
+    MetricRevision,
+    Org,
+    Run,
+    generate_embed_token,
+)
 from litmus_api.serializers import slugify, spec_to_dict
 
 router = APIRouter(tags=["metrics"])
@@ -23,6 +30,7 @@ class MetricUpsertIn(BaseModel):
     source_repo: str | None = None
     source_path: str | None = None
     source_sha: str | None = None
+    author: str | None = None
 
 
 class MetricOut(BaseModel):
@@ -40,6 +48,17 @@ class MetricOut(BaseModel):
     updated_at: datetime
     latest_run: dict[str, Any] | None = None
     embed_token: str | None = None
+    revision_count: int = 0
+
+
+class RevisionOut(BaseModel):
+    id: str
+    metric_id: str
+    spec_text: str
+    spec: dict[str, Any]
+    source_sha: str | None = None
+    author: str | None = None
+    created_at: datetime
 
 
 def _latest_run_payload(session: Session, metric: Metric) -> dict[str, Any] | None:
@@ -79,6 +98,24 @@ def _embed_token(session: Session, metric: Metric) -> str:
     return key.token
 
 
+def _latest_revision(session: Session, metric_id: str) -> MetricRevision | None:
+    return (
+        session.query(MetricRevision)
+        .filter_by(metric_id=metric_id)
+        .order_by(desc(MetricRevision.created_at), desc(MetricRevision.id))
+        .first()
+    )
+
+
+def _revision_count(session: Session, metric_id: str) -> int:
+    return int(
+        session.query(func.count(MetricRevision.id))
+        .filter_by(metric_id=metric_id)
+        .scalar()
+        or 0
+    )
+
+
 def _to_out(session: Session, metric: Metric) -> MetricOut:
     return MetricOut(
         id=metric.id,
@@ -95,6 +132,7 @@ def _to_out(session: Session, metric: Metric) -> MetricOut:
         updated_at=metric.updated_at,
         latest_run=_latest_run_payload(session, metric),
         embed_token=_embed_token(session, metric),
+        revision_count=_revision_count(session, metric.id),
     )
 
 
@@ -148,6 +186,10 @@ def upsert_metric(
             source_sha=payload.source_sha,
         )
         session.add(metric)
+        session.flush()
+        # First upsert always records a revision — this seeds the history
+        # so even metrics that never change have an audit trail.
+        _record_revision(session, metric, payload, spec_dict, force=True)
     else:
         metric = existing
         metric.name = spec.name
@@ -162,11 +204,46 @@ def upsert_metric(
             metric.source_path = payload.source_path
         if payload.source_sha is not None:
             metric.source_sha = payload.source_sha
+        session.flush()
+        # Only record a revision when the spec text actually changed — identical
+        # re-upserts (common in CI) would otherwise clutter the log.
+        _record_revision(session, metric, payload, spec_dict, force=False)
 
     session.flush()
     out = _to_out(session, metric)
     session.commit()
     return out
+
+
+def _record_revision(
+    session: Session,
+    metric: Metric,
+    payload: MetricUpsertIn,
+    spec_dict: dict[str, Any],
+    *,
+    force: bool,
+) -> MetricRevision | None:
+    """Insert a MetricRevision row if the spec has meaningfully changed.
+
+    ``force=True`` always inserts (used on first upsert so the history is
+    seeded). ``force=False`` compares against the most recent revision's
+    ``spec_text`` and skips the write if they match.
+    """
+    if not force:
+        latest = _latest_revision(session, metric.id)
+        if latest is not None and latest.spec_text == payload.spec_text:
+            return None
+
+    revision = MetricRevision(
+        metric_id=metric.id,
+        spec_text=payload.spec_text,
+        spec_json=spec_dict,
+        source_sha=payload.source_sha,
+        author=payload.author,
+    )
+    session.add(revision)
+    session.flush()
+    return revision
 
 
 @router.get("/metrics/{metric_id}", response_model=MetricOut)
@@ -231,3 +308,57 @@ def get_history(
             for r in runs
         ],
     }
+
+
+_REVISION_LIST_LIMIT = 30
+
+
+@router.get("/metrics/{metric_id}/revisions", response_model=list[RevisionOut])
+def list_revisions(
+    metric_id: str,
+    org: Org = Depends(current_org),
+    session: Session = Depends(db_session),
+) -> list[RevisionOut]:
+    """Return the last ``_REVISION_LIST_LIMIT`` spec revisions for a metric.
+
+    Results are ordered oldest-last (i.e. the newest revision is the final
+    entry in the list) so consumers can render a top-to-bottom timeline
+    without reversing client-side.
+    """
+    metric = (
+        session.query(Metric)
+        .filter_by(id=metric_id, org_id=org.id, deleted_at=None)
+        .one_or_none()
+    )
+    if metric is None:
+        # allow slug lookup for friendly URLs
+        metric = (
+            session.query(Metric)
+            .filter_by(slug=metric_id, org_id=org.id, deleted_at=None)
+            .one_or_none()
+        )
+    if metric is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "metric not found")
+
+    # Pull the newest N by created_at, then reverse so the response is
+    # oldest-first (matches the contract in the task spec).
+    recent = (
+        session.query(MetricRevision)
+        .filter_by(metric_id=metric.id)
+        .order_by(desc(MetricRevision.created_at), desc(MetricRevision.id))
+        .limit(_REVISION_LIST_LIMIT)
+        .all()
+    )
+    revisions = list(reversed(recent))
+    return [
+        RevisionOut(
+            id=rev.id,
+            metric_id=rev.metric_id,
+            spec_text=rev.spec_text,
+            spec=rev.spec_json,
+            source_sha=rev.source_sha,
+            author=rev.author,
+            created_at=rev.created_at,
+        )
+        for rev in revisions
+    ]
