@@ -90,11 +90,13 @@ litmus explain metrics/revenue.metric
 | Command | What it does |
 |---------|--------------|
 | `litmus init` | Scaffold `litmus.yml` and a starter `metrics/example.metric`. |
-| `litmus check <path>` | Parse every `.metric` under `<path>` and run its trust rules against the warehouse. Exits non-zero on failure. |
+| `litmus check <path>` | Parse every `.metric` under `<path>` and run its trust rules against the warehouse. Exits non-zero on failure. Add `--push` to ingest results into a hosted catalog. |
 | `litmus parse <file>` | Dump the parsed `MetricSpec` — useful when debugging DSL changes. |
 | `litmus explain <file>` | Render a plain-English description from a spec (non-engineer friendly). |
-| `litmus import-dbt <manifest.json>` | Seed `.metric` files from an existing dbt `manifest.json`. |
+| `litmus explain-run <run-id>` | Ask Claude for a hypothesis + suggested action on a failed run (requires the `[ai]` extras and an Anthropic API key on the server). |
+| `litmus import-dbt <manifest.json>` | Seed `.metric` files from an existing dbt `manifest.json`. Add `--push` to also ingest lineage into the catalog. |
 | `litmus export --to dbt <path>` | Emit dbt `schema.yml` plus singular tests from a `.metric` file, so Litmus rules run inside a dbt project. |
+| `litmus reconcile <slug>` | Compare the latest warehouse value to Looker / Tableau for the same metric and flag drift. Requires the `[bi]` extras. |
 | `litmus share <path>` | Render a self-contained HTML card (with check results) you can paste into Slack or Notion. |
 | `litmus report <dir>` | Produce an HTML, Markdown, or JSON report across a whole metrics folder. |
 
@@ -161,6 +163,23 @@ jobs:
 
 The composite action is defined in [`action.yml`](action.yml). Inputs: `path` (required), `config`, `extras` (e.g. `postgres,snowflake`), `fail-on-warning`, `litmus-version`. Outputs: `report-json`, `trust-score`, `summary-markdown`. An annotated copy of this workflow lives at [`.github/workflows/litmus-check.example.yml`](.github/workflows/litmus-check.example.yml).
 
+## Hosted catalog (`litmus_api/`)
+
+The CLI is enough on its own. But teams that want a shared metric catalog, run history, embeddable trust badges, and AI-powered failure explanations can run the server:
+
+```bash
+pip install 'litmus-data[server]'
+alembic -c litmus_api/migrations/alembic.ini upgrade head
+uvicorn litmus_api.main:app
+```
+
+- `litmus check metrics/ --push --endpoint https://... --api-key $LITMUS_API_KEY` sends results to the catalog after every local or CI run.
+- `GET /embed/<token>/badge.svg` renders a 275×36 SVG trust pill (green / yellow / red / grey) that never 404s — safe to drop into Notion, Slack, GitHub READMEs.
+- `GET /api/v1/metrics/{id}/revisions` returns the full spec-edit history so you can correlate a trust regression to the commit that changed the definition.
+- Turn on AI explanations with `pip install 'litmus-data[ai]'` and `export LITMUS_ANTHROPIC_API_KEY=...`; the UI then surfaces a "Why did this fail?" button on failed runs.
+
+A Next.js UI (`ui/`) ships alongside the API with a catalog, per-metric detail pages (lineage + reconciliation + trust history), and a proxy for the embed route. Both are containerised via `deploy/docker-compose.yml`.
+
 ### GitHub integration
 
 If you're running a Litmus catalog server, point a GitHub webhook at `POST <your-server>/webhooks/github` and every push that touches a `.metric` file will upsert it into the catalog automatically — no CI job required.
@@ -187,6 +206,8 @@ Litmus is a **trust / contract layer**, not a replacement for your transformatio
 - [Getting Started](docs/getting-started.md)
 - [Spec Language Reference](docs/spec-language.md)
 - [JSON Report Schema](docs/json-schema.md)
+- [Architecture overview](docs/ARCHITECTURE.md) · [Dagster-of-trust model](docs/DAGSTER_MODEL.md)
+- [GitHub webhook setup](docs/github-webhook.md) · [BI reconciliation setup](docs/bi-connectors.md) · [AI explanations](docs/ai-explanations.md)
 - Example specs — [SaaS](docs/examples/saas-metrics), [e-commerce](docs/examples/ecommerce-metrics), and [`examples/metrics/`](examples/metrics)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)

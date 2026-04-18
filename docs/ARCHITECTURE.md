@@ -1,11 +1,35 @@
 # Litmus 0.2 — Architecture
 
-**Status:** Draft. Target cut: 12-week MVP.
+**Status:** Reference design doc. Most of the OSS cut has shipped — see "Implementation status" below.
 **Audience:** Backend engineers starting implementation. Frontend engineers consuming the API. Anyone evaluating the OSS/Cloud split.
 
 0.1 shipped a CLI that parses `.metric` files, runs trust checks against a warehouse, and prints a report. 0.2 turns that output into a **system of record** — every metric gets a permanent URL, a history, an embeddable trust badge, and a lineage graph. The CLI stays. A web app + API join it. The hosted version multi-tenants the same binary.
 
 This doc is the minimum spec a backend engineer needs to start on Tuesday.
+
+---
+
+## Implementation status (as of 0.2 OSS cut)
+
+Shipped and running in-repo:
+
+- **FastAPI server** (`litmus_api/`): metrics catalog, runs, check_results, embed tokens + `/embed/<token>/badge.svg`, metric revisions, lineage graphs, BI mappings, reconciliations, run explanations. Install with `pip install 'litmus-data[server]'`.
+- **Alembic migrations** (`litmus_api/migrations/`): `0001_initial_schema` → `0005_bi_mappings`. `test_alembic_head_tables_match_metadata_create_all` locks the invariant. `init_schema()` in `litmus_api/main.py` does a three-way dispatch: in-memory SQLite → `create_all`, `LITMUS_AUTO_MIGRATE=true` → `alembic upgrade head`, default → noop.
+- **Next.js UI** (`ui/`): catalog, metric detail (lineage + reconciliation + trust history), revisions viewer, embed badge proxy. Dockerised alongside the API in `deploy/docker-compose.yml`.
+- **GitHub webhook** (`POST /webhooks/github`, mounted at root): verifies `X-Hub-Signature-256` against `LITMUS_GITHUB_WEBHOOK_SECRET`, fetches `.metric` files from `raw.githubusercontent.com`, shares `_perform_upsert` with the HTTP route. Public repos only — no GitHub App OAuth in the OSS cut. Docs: `docs/github-webhook.md`.
+- **dbt lineage**: `litmus import-dbt --push` walks the manifest's `parent_map` up to 3 hops and POSTs to `/api/v1/metrics/{id}/lineage`. Subgraph is replaced atomically. GET returns a spec-derived 2-node stub when nothing has been imported yet, so the UI never renders empty.
+- **BI reconciliation** (`litmus_api/bi/` + `litmus_api/jobs/reconciliation.py`, gated behind `[bi]` extras): thin Looker + Tableau connectors. One `Reconciliation` row per attempt with `|delta|<2%` → pass / `<10%` → warn / else fail. A connector error is recorded as `fail` with the exception message — never pollutes the rest of the job. CLI: `litmus reconcile <slug>`. Docs: `docs/bi-connectors.md`.
+- **AI run explanations** (`litmus_api/ai/`, gated behind `[ai]` extras): `POST /api/v1/runs/{id}/explain` asks Claude Sonnet 4.6 (forced tool-use) for hypothesis + suggested action on failed/errored runs. One `RunExplanation` row per run; `?regenerate=true` upserts. Docs: `docs/ai-explanations.md`.
+- **Metric revisions**: append-only `metric_revisions` table. `POST /api/v1/metrics` only writes a new revision when `spec_text` differs from the latest — identical re-upserts (common in CI) are deduped. `GET /api/v1/metrics/{id}/revisions` returns up to 30 entries, oldest-last.
+
+Not in the OSS cut (still design-only in this doc):
+
+- `users`, `org_members`, SSO, multi-tenant control plane, billing, audit log UI, Redis-based queue, Cloud-hosted AI key. The OSS binary runs single-tenant with a default org; the design below describes how these grow into Cloud.
+- `bi_sources` as a first-class table with credentials store. The shipped model puts the BI identifier directly on `BIMapping` (`source`, `identifier`) — fine for Looker/Tableau with env-var creds, will need the `bi_sources` table before any OAuth flow lands.
+- Scheduled reconciler daemon. We ship the one-shot `litmus reconcile` + `POST /api/v1/metrics/{id}/reconcile`; operators wire their own cadence.
+- Branch Deployments, column-level lineage. Out of scope (see `docs/DAGSTER_MODEL.md` for the rationale).
+
+Use the sections below as the north-star design; use the in-repo code (`litmus_api/`, `ui/`, `tests/test_api/`) as the authoritative source for current behavior.
 
 ---
 
