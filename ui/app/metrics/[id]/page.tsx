@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AskPanel } from "@/components/AskPanel";
 import { LineageGraph } from "@/components/LineageGraph";
 import { ReconciliationPanel } from "@/components/ReconciliationPanel";
 import { TrustBadge } from "@/components/TrustBadge";
@@ -60,10 +61,11 @@ export default async function MetricDetailPage({ params }: MetricPageProps) {
     : null;
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-6 py-10 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="space-y-8">
       <div>
         <Link
-          href="/"
+          href="/metrics"
           className="text-sm text-neutral-500 hover:text-neutral-800"
         >
           &larr; Back to catalog
@@ -211,6 +213,18 @@ export default async function MetricDetailPage({ params }: MetricPageProps) {
           />
         </div>
       </section>
+      </div>
+
+      {/* Right-side AI chat sidebar. On mobile it stacks below the metric
+          body; on desktop it sticks near the top so the question box stays
+          in-view while the user scrolls through the metric detail. */}
+      <aside className="lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
+        <AskPanel
+          mode="sidebar"
+          metricSlug={metric.id}
+          metricName={metric.name}
+        />
+      </aside>
     </div>
   );
 }

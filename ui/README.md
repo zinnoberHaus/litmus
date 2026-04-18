@@ -1,8 +1,10 @@
 # Litmus UI
 
-Web frontend for the **Litmus metric catalog** (part of the OSS repo, MIT/Apache licensed with the rest of Litmus). Built for the 0.2 pivot from pure CLI to *hosted catalog + embeddable trust badges*.
+Web frontend for **Litmus** — the trust-and-approval layer for business metrics. Part of the OSS monorepo (MIT/Apache).
 
-This is a scaffold — every piece of data on screen today comes from local fixtures in `lib/fixtures.ts`. Wiring to the Python API is the next step.
+Built around the **three-audience** positioning from the v0.3 refactor (see `../REFACTOR_BLUEPRINT.md`):
+
+> Canonical metric contracts for engineers, AI-answered questions for PMs, embeddable trust badges for everyone.
 
 ## Stack
 
@@ -11,8 +13,6 @@ This is a scaffold — every piece of data on screen today comes from local fixt
 - TypeScript
 - Tailwind CSS
 - Zero chart/graph libraries — sparklines and lineage are hand-drawn SVG
-
-Dependencies are intentionally minimal. No ESLint, no shadcn runtime, no recharts.
 
 ## Getting started
 
@@ -24,72 +24,76 @@ npm run dev
 
 Then open:
 
-- http://localhost:3000 — the catalog (MRR, MAU, Churn)
-- http://localhost:3000/metrics/mrr — the metric detail page (the "killer screen")
-- http://localhost:3000/metrics/mau — warning example
-- http://localhost:3000/metrics/churn — failing example + cross-source disagreement
-- http://localhost:3000/embed/mrr — raw SVG trust badge (for Notion/Slack/READMEs)
+- http://localhost:3000 — the landing page (three audiences, one spec)
+- http://localhost:3000/metrics — the metric catalog
+- http://localhost:3000/metrics/mrr — metric detail with an AI sidebar
+- http://localhost:3000/install — install flow hub
+- http://localhost:3000/install/dbt — dbt package walkthrough (primary path)
+- http://localhost:3000/install/cli — standalone CLI
+- http://localhost:3000/install/hosted — self-hosted docker-compose
+- http://localhost:3000/install/slack — Slack sign-off + `/ask` setup
+- http://localhost:3000/ask — standalone AI chat page
+- http://localhost:3000/badge — badge gallery with copy-paste snippets
+- http://localhost:3000/embed/mrr — raw SVG badge
 
 ## Directory layout
 
 ```
 ui/
   app/
-    layout.tsx                  — top-level shell (header/footer)
-    page.tsx                    — catalog (list of metrics)
+    layout.tsx                  — root shell (nav + footer)
+    page.tsx                    — landing page (three-audience pitch)
+    not-found.tsx               — app-router 404
     globals.css                 — tailwind entry
-    metrics/[id]/page.tsx       — metric detail (definition, trust history, lineage, reconciliation)
-    embed/[id]/route.ts         — server-rendered SVG badge, Content-Type: image/svg+xml
+    metrics/
+      page.tsx                  — catalog (empty-state hands users to /install)
+      [id]/page.tsx             — metric detail + AI sidebar
+    install/
+      layout.tsx                — shared install-tabs chrome
+      page.tsx                  — hub chooser (dbt / cli / hosted / slack)
+      dbt/page.tsx              — dbt package walkthrough
+      cli/page.tsx              — standalone CLI walkthrough
+      hosted/page.tsx           — docker-compose self-host
+      slack/page.tsx            — Slack webhook + signing-secret setup
+    ask/page.tsx                — standalone AI chat
+    badge/page.tsx              — badge gallery + embed snippets
+    embed/[id]/route.ts         — server-rendered SVG badge
   components/
-    TrustBadge.tsx              — green/yellow/red pill
-    TrustHistoryChart.tsx       — SVG sparkline w/ pass/warn/fail bands
-    LineageGraph.tsx            — SVG left-to-right DAG
-    ReconciliationPanel.tsx     — warehouse vs Looker vs Tableau table
+    Nav.tsx                     — top nav (org switcher hidden in OSS)
+    Section.tsx                 — landing-section wrapper
+    InstallTabs.tsx             — install-flow segmented control
+    AskPanel.tsx                — reusable chat panel (sidebar + standalone)
+    HeroBadgeDemo.tsx           — auto-polling badge for the landing hero
+    CodeBlock.tsx               — snippet with floating copy button
+    CopyButton.tsx              — clipboard helper
+    SignoffChip.tsx             — Slack sign-off status chip
+    TrustBadge.tsx              — existing pill
+    TrustHistoryChart.tsx       — existing sparkline
+    LineageGraph.tsx            — existing DAG
+    ReconciliationPanel.tsx     — existing cross-source table
+    WhyDidThisFail.tsx          — existing AI explanation panel
   lib/
-    fixtures.ts                 — all dummy data lives here
-  package.json
-  tsconfig.json
-  tailwind.config.ts
-  postcss.config.mjs
-  next.config.mjs
+    api.ts                      — live Litmus API client with fixture fallback
+    ask.ts                      — /api/v1/ask helper (mocked in dev until task #54)
+    fixtures.ts                 — demo-mode data for MRR/MAU/Churn
 ```
 
-## What's real vs stubbed
+## What's real vs mocked
 
-| Piece | Status |
-|-------|--------|
-| Catalog list | Stubbed (3 metrics in `lib/fixtures.ts`) |
-| Metric detail layout | Real — final shape |
-| Trust badge colors + semantics | Real |
-| Trust history sparkline | Real renderer, stubbed data |
-| Lineage graph | Real renderer, stubbed data, *naive* left-to-right layout (swap for dagre/elkjs later) |
-| Cross-source reconciliation | Real component, stubbed rows |
-| `/embed/:id` SVG badge | Real SVG output, stubbed status |
-| Auth / multi-tenant | Not in scope for scaffold |
-| API layer | Not wired |
-
-## Where real API integration will go
-
-Every read happens through two synchronous functions at the bottom of `lib/fixtures.ts`:
-
-```ts
-listMetrics(): Metric[]
-getMetric(id: string): Metric | null
-```
-
-When the Python API lands, turn these into `async` functions that call `fetch(...)`. The `Metric` interface is the contract — keep the shape stable and the components above will not need to change.
-
-Suggested wiring:
-
-1. Add `API_BASE` (env var `LITMUS_API_URL` on the server).
-2. Make `listMetrics` / `getMetric` `async` and `await fetch(\`${API_BASE}/metrics\`)`.
-3. Convert page components to `async` where needed (already the case for `metrics/[id]`).
-4. For the embed route, the server handler in `app/embed/[id]/route.ts` already runs on the Node runtime — fetch from the API there and render the SVG from the live trust status.
+| Piece                     | Status                                                |
+|---------------------------|-------------------------------------------------------|
+| Catalog + detail          | Real (API-backed) with fixture fallback               |
+| Trust history / lineage   | Real rendering, data from API or fixtures             |
+| `/embed/[id]` SVG badge   | Real — proxies the API or falls back to local SVG     |
+| Landing + install flow    | Static copy, quoted from `../docs/positioning.md`     |
+| `<AskPanel>` chat         | UI real; `/api/v1/ask` endpoint still being built (#54) — `lib/ask.ts` returns a mocked response in dev |
+| Slack sign-off chip       | UI real; sign-off pipeline being built (#52)          |
+| Auth / SSO / org switcher | Out of scope for OSS (Cloud wedge, v0.5)              |
 
 ## Scripts
 
 - `npm run dev` — dev server on port 3000
-- `npm run build` — production build
+- `npm run build` — production build (run with `NODE_ENV=production` if your shell has `NODE_ENV=development` set)
 - `npm run start` — run the production build
 - `npm run typecheck` — TypeScript-only check (no emit)
 
