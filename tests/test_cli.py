@@ -143,6 +143,17 @@ class TestInitCommand:
             # Nothing leaked into cwd.
             assert not Path("litmus.yml").exists()
 
+    def test_init_prompts_for_project_name(self, runner: CliRunner, tmp_path: Path):
+        """`litmus init` with no args prompts for a project name (dbt-style)."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            # Three newlines after the name: accept default warehouse (duckdb)
+            # and default database (demo.duckdb).
+            result = runner.invoke(main, ["init"], input="sales-metrics\n\n\n")
+            assert result.exit_code == 0, result.output
+            assert "Project name" in result.output
+            assert Path("sales-metrics/litmus.yml").exists()
+            assert Path("sales-metrics/metrics/example.metric").exists()
+
     def test_init_refuses_nonempty_directory(self, runner: CliRunner, tmp_path: Path):
         with runner.isolated_filesystem(temp_dir=tmp_path):
             Path("myproj").mkdir()

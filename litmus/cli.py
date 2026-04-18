@@ -530,11 +530,23 @@ def init(
 
     \b
     Examples:
-      litmus init                        # scaffold into the current directory
-      litmus init my_metrics             # create ./my_metrics/ and scaffold into it
-      litmus init my_metrics --warehouse postgres --yes
+      litmus init                        # prompts for a project name (e.g. sales-metrics)
+      litmus init sales-metrics          # create ./sales-metrics/ and scaffold into it
+      litmus init . --yes                # scaffold into the current directory, no prompts
+      litmus init sales-metrics --warehouse postgres --yes
     """
-    # Resolve target directory.
+    # Prompt for missing values unless the caller explicitly opted out with --yes.
+    # This mirrors `dbt init` — a bare `litmus init` should ask for a project name.
+    interactive = not skip_prompts
+
+    # Resolve project name → target directory.
+    # Precedence: positional arg > interactive prompt > cwd (used under --yes).
+    if project_name is None and interactive:
+        project_name = click.prompt(
+            "Project name (e.g. sales-metrics, or '.' for current dir)",
+            default="my-metrics",
+        )
+
     if project_name and project_name != ".":
         target = Path(project_name)
         if target.exists() and any(target.iterdir()) and not force:
@@ -550,7 +562,6 @@ def init(
         display_name = Path.cwd().name or "litmus-project"
 
     # Resolve warehouse type. Prompt only if interactive and no flag given.
-    interactive = sys.stdin.isatty() and not skip_prompts
     if warehouse is None:
         if interactive:
             warehouse = click.prompt(
