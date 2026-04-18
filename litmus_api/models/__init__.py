@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -105,6 +106,22 @@ class MetricRevision(Base):
     source_sha = Column(String(64))
     author = Column(String(320))
     created_at = Column(DateTime, nullable=False, default=_now)
+
+    # Slack sign-off workflow (migration 0006). All columns are nullable /
+    # default False so legacy revisions keep working without backfill.
+    #
+    # ``signoff_status`` is NULL when ``signoff_required`` is False — i.e. the
+    # revision doesn't participate in the workflow at all. When a sign-off *is*
+    # required, status transitions through ``pending → approved|rejected``.
+    # ``auto_approved`` is reserved for a future rule-based auto-approval path
+    # (e.g. changes that only touch whitespace).
+    signoff_required = Column(Boolean, nullable=False, default=False)
+    signoff_status = Column(String(16), nullable=True)
+    signoff_by = Column(String(320), nullable=True)
+    signoff_at = Column(DateTime, nullable=True)
+    signoff_reason = Column(Text, nullable=True)
+    slack_message_ts = Column(String(32), nullable=True)
+    slack_channel_id = Column(String(32), nullable=True)
 
     metric = relationship("Metric", back_populates="revisions")
 

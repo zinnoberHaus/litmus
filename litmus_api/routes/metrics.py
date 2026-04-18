@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 from datetime import datetime
 from typing import Any
 
@@ -23,6 +25,8 @@ from litmus_api.models import (
 )
 from litmus_api.serializers import slugify, spec_to_dict
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["metrics"])
 
 
@@ -33,6 +37,12 @@ class MetricUpsertIn(BaseModel):
     source_path: str | None = None
     source_sha: str | None = None
     author: str | None = None
+    # Opt-in Slack sign-off per upsert. v0.3 surfaces this as a payload flag
+    # and an env fallback (``LITMUS_SLACK_SIGNOFF_ALL``) because the DSL
+    # doesn't carry a ``signoff_required`` field yet — Architect's call to
+    # add it (tracked in REFACTOR_BLUEPRINT §2.3). Defaults to False so
+    # existing clients (CI, webhook, UI) keep their current behavior.
+    signoff_required: bool | None = None
 
 
 class MetricOut(BaseModel):
@@ -61,6 +71,14 @@ class RevisionOut(BaseModel):
     source_sha: str | None = None
     author: str | None = None
     created_at: datetime
+    # Slack sign-off fields (v0.3, additive — all None for legacy revisions).
+    # The UI's ``<SignoffChip>`` keys off ``signoff_status``; the remaining
+    # fields power the hover tooltip ("approved by alice 3 days ago").
+    signoff_required: bool = False
+    signoff_status: str | None = None
+    signoff_by: str | None = None
+    signoff_at: datetime | None = None
+    signoff_reason: str | None = None
 
 
 def _latest_run_payload(session: Session, metric: Metric) -> dict[str, Any] | None:
@@ -200,7 +218,7 @@ def _perform_upsert(
         session.flush()
         # First upsert always records a revision — this seeds the history
         # so even metrics that never change have an audit trail.
-        _record_revision(session, metric, payload, spec_dict, force=True)
+        revision = _record_revision(session, metric, payload, spec_dict, force=True)
     else:
         metric = existing
         metric.name = spec.name
@@ -218,10 +236,67 @@ def _perform_upsert(
         session.flush()
         # Only record a revision when the spec text actually changed — identical
         # re-upserts (common in CI) would otherwise clutter the log.
-        _record_revision(session, metric, payload, spec_dict, force=False)
+        revision = _record_revision(session, metric, payload, spec_dict, force=False)
 
     session.flush()
+
+    # Fire-on-upsert Slack sign-off hook. Strictly best-effort: a Slack
+    # outage (or a missing env var) must NEVER break the upsert. A no-op
+    # when ``_signoff_required_for`` returns False — matches existing tests
+    # that never set the flag.
+    if revision is not None and _signoff_required_for(payload):
+        try:
+            _fire_signoff_hook(session, metric, revision)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "Slack signoff hook failed for metric %s: %s", metric.slug, exc
+            )
+
     return metric
+
+
+def _signoff_required_for(payload: MetricUpsertIn) -> bool:
+    """Decide whether a new revision needs Slack sign-off.
+
+    Two paths in v0.3:
+
+    1. ``payload.signoff_required=True`` — explicit per-upsert opt-in. Used
+       by the UI "request sign-off" flow and by tests.
+    2. ``LITMUS_SLACK_SIGNOFF_ALL=true`` — ops-level kill-switch to enable
+       sign-off for every revision across the catalog (useful for pilot
+       deployments before the DSL / YAML grammar supports the flag).
+
+    Once Architect adds ``signoff_required`` to ``MetricSpec`` (blueprint
+    §2.3), this function gains a third branch reading ``spec.signoff_required``
+    — wiring up ``_perform_upsert`` once here keeps that change surgical.
+    """
+    if payload.signoff_required is True:
+        return True
+    return os.environ.get("LITMUS_SLACK_SIGNOFF_ALL", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _fire_signoff_hook(
+    session: Session, metric: Metric, revision: MetricRevision
+) -> None:
+    """Mark the revision as pending + post to Slack (best-effort).
+
+    Imported lazily so the metrics route doesn't pull the Slack module on
+    every import — keeps ``litmus --help`` cold-start fast per the
+    blueprint's sign-off checklist.
+    """
+    from litmus_api.routes.slack import _post_signoff_to_slack  # noqa: WPS433
+
+    revision.signoff_required = True
+    if revision.signoff_status not in {"pending", "approved", "rejected", "auto_approved"}:
+        revision.signoff_status = "pending"
+    session.flush()
+
+    _post_signoff_to_slack(session, metric, revision)
 
 
 @router.post("/metrics", response_model=MetricOut, status_code=status.HTTP_201_CREATED)
@@ -384,6 +459,11 @@ def list_revisions(
             source_sha=rev.source_sha,
             author=rev.author,
             created_at=rev.created_at,
+            signoff_required=bool(rev.signoff_required),
+            signoff_status=rev.signoff_status,
+            signoff_by=rev.signoff_by,
+            signoff_at=rev.signoff_at,
+            signoff_reason=rev.signoff_reason,
         )
         for rev in revisions
     ]

@@ -9,7 +9,7 @@ from litmus_api import __version__
 from litmus_api.config import get_settings
 from litmus_api.db import get_engine, init_engine, session_scope
 from litmus_api.models import Base, ensure_default_org
-from litmus_api.routes import bi, embeds, metrics, runs, webhooks
+from litmus_api.routes import bi, embeds, metrics, runs, slack, webhooks
 
 _MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
@@ -79,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(metrics.router, prefix="/api/v1")
     app.include_router(runs.router, prefix="/api/v1")
     app.include_router(bi.router, prefix="/api/v1")
+    app.include_router(slack.router, prefix="/api/v1")
     app.include_router(embeds.router)
     # Webhooks are mounted at the root — GitHub's webhook UI writes the URL
     # verbatim and we want it short (``/webhooks/github``, not
