@@ -13,6 +13,19 @@ from litmus import __version__
 console = Console()
 
 
+def _detect_dbt_project(start: Path | None = None) -> bool:
+    """Return True if a ``dbt_project.yml`` lives in ``start`` or any ancestor.
+
+    Used by ``--backend auto`` per blueprint Decision 2. Walks up to the
+    filesystem root. No I/O beyond ``Path.exists()``.
+    """
+    cur = (start or Path.cwd()).resolve()
+    for parent in (cur, *cur.parents):
+        if (parent / "dbt_project.yml").is_file():
+            return True
+    return False
+
+
 @click.group()
 @click.version_option(version=__version__, prog_name="litmus")
 def main():
@@ -49,12 +62,31 @@ def main():
     "--no-history",
     is_flag=True,
     default=False,
-    help="Skip writes to the SQLite history store (disables change_rule comparisons).",
+    help="Skip writes to the history store (disables change_rule comparisons).",
 )
 @click.option(
     "--history-db",
     default=None,
     help="Path to the SQLite history DB. Defaults to ~/.litmus/history.db or $LITMUS_HISTORY_DB.",
+)
+@click.option(
+    "--backend",
+    type=click.Choice(["sqlite", "warehouse", "auto"]),
+    default="auto",
+    help=(
+        "History backend. 'sqlite' = local ~/.litmus/history.db (default for "
+        "solo use). 'warehouse' = shared litmus_history table in the configured "
+        "warehouse (shared across a team). 'auto' picks 'warehouse' when a dbt "
+        "project is detected or $LITMUS_BACKEND=warehouse is set, else 'sqlite'."
+    ),
+)
+@click.option(
+    "--history-schema",
+    default=None,
+    help=(
+        "Schema (a.k.a. dataset) to hold the litmus_history table when "
+        "--backend warehouse. Defaults to the warehouse's configured schema."
+    ),
 )
 @click.option(
     "--push",
@@ -77,6 +109,8 @@ def check(
     schema_version: str,
     no_history: bool,
     history_db: str | None,
+    backend: str,
+    history_schema: str | None,
     push_endpoint: str | None,
     api_key: str | None,
 ):
@@ -117,14 +151,36 @@ def check(
     # Run checks
     import os as _os
 
-    from litmus.checks.history import HistoryStore
+    from litmus.checks.history import HistoryStore, WarehouseHistoryStore
 
     connector = get_connector(cfg)
-    history = None if no_history else HistoryStore(path=history_db)
-    if history is not None:
-        history.connect()
+
+    # Resolve --backend auto → sqlite or warehouse per blueprint Decision 2.
+    effective_backend = backend
+    if backend == "auto":
+        if _detect_dbt_project() or _os.environ.get("LITMUS_BACKEND") == "warehouse":
+            effective_backend = "warehouse"
+        else:
+            effective_backend = "sqlite"
+
+    history: object | None
+    if no_history:
+        history = None
+    elif effective_backend == "warehouse":
+        # WarehouseHistoryStore piggy-backs on the same connector run_checks
+        # already opens, so we don't pay a second connection.
+        history = WarehouseHistoryStore(
+            connector=connector,
+            schema=history_schema or (cfg.warehouse.schema if cfg.warehouse.schema else None),
+        )
+    else:
+        history = HistoryStore(path=history_db)
+
     try:
         connector.connect()
+        # WarehouseHistoryStore needs the connector open before ``connect()``.
+        if history is not None:
+            history.connect()  # type: ignore[union-attr]
         run_id = _os.environ.get("GITHUB_RUN_ID") or _os.environ.get("LITMUS_RUN_ID")
         commit_sha = _os.environ.get("GITHUB_SHA") or _os.environ.get("LITMUS_COMMIT_SHA")
         results = []
@@ -132,15 +188,15 @@ def check(
             suite = run_checks(
                 connector,
                 spec,
-                history=history,
+                history=history,  # type: ignore[arg-type]
                 run_id=run_id,
                 commit_sha=commit_sha,
             )
             results.append((spec, suite))
     finally:
-        connector.close()
         if history is not None:
-            history.close()
+            history.close()  # type: ignore[union-attr]
+        connector.close()
 
     # Output
     if fmt == "json":

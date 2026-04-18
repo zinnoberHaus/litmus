@@ -1,0 +1,22 @@
+Metric: Example Revenue
+Description: Total revenue from completed orders in the demo dbt project.
+Owner: data-team
+Tags: finance, example, dbt
+
+Source: orders
+
+Given all records from orders table
+  And status is "completed"
+  And amount is present
+
+When we calculate
+  Then sum the amount column
+  And round to 2 decimal places
+
+The result is "Example Revenue"
+
+Trust:
+  Freshness must be less than 24 hours
+  Null rate on amount must be less than 5%
+  Row count must not drop more than 25% day over day
+  Value must be between 0 and 10000000

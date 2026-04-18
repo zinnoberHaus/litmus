@@ -1,0 +1,48 @@
+# Litmus dbt package — canonical metric contracts + trust checks materialised
+# into your warehouse, triggered as an on-run-end hook.
+#
+# Ship alongside: the Python CLI (`pip install litmus-data`) writes the same
+# tables this package defines. One dataset, two ways in:
+#
+#   * dbt users           — `dbt deps && dbt run --select litmus`
+#   * Python CLI users    — `litmus check metrics/ --backend warehouse`
+#
+# The package is intentionally thin. The Python side owns trust-check
+# semantics; dbt's job is to make the history tables real so the rest of the
+# stack (AI Q&A, the catalog UI, reconciliation) can read them.
+name: 'litmus'
+version: '0.3.0'
+config-version: 2
+
+# Keep in lockstep with the published Python package. A minor version bump on
+# one side ships a matching tag on the other (see docs/RELEASING.md).
+require-dbt-version: [">=1.6.0", "<2.0.0"]
+
+# No submodels under a profile — all the state is captured via macros that
+# fire from on-run-end.
+model-paths: ["models"]
+macro-paths: ["macros"]
+
+# Models end up in the default target schema. Users who want Elementary-style
+# separation (e.g. `analytics_litmus`) can override via a schema config in
+# their own dbt_project.yml:
+#
+#   models:
+#     litmus:
+#       +schema: litmus   # writes to `{target.schema}_litmus`
+#
+# Leaving the default unset means the tables land in the target schema — the
+# simplest path for anyone booting the package for the first time.
+models:
+  litmus:
+    +materialized: table
+
+# No vars surfaced today. If users need to rename the history table (rare;
+# collides only if they already have a `litmus_runs` table), they can
+# override via a dbt var without us pre-declaring a surface.
+vars: {}
+
+# Execute the Litmus on-run-end hook. The macro is a no-op if no trust
+# checks are declared, so leaving this enabled is safe for every project.
+on-run-end:
+  - "{{ litmus.run_trust_checks() }}"

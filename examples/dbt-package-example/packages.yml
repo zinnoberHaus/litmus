@@ -1,0 +1,13 @@
+# Installing the Litmus dbt package into a dbt project.
+#
+# This example uses a local-path install to the package at
+# ../../dbt_packages/litmus so you can exercise the package against a
+# checkout without going through dbt Hub. In production, replace with the
+# Hub entry:
+#
+#   packages:
+#     - package: litmus-data/litmus
+#       version: [">=0.3.0", "<0.4.0"]
+
+packages:
+  - local: ../../dbt_packages/litmus

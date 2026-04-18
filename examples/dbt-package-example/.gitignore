@@ -1,0 +1,12 @@
+# dbt installs packages here on `dbt deps` — symlink for local-path installs.
+dbt_packages/
+target/
+logs/
+package-lock.yml
+
+# DuckDB file dbt materialises into.
+warehouse.duckdb
+warehouse.duckdb.wal
+
+# dbt anonymous-usage id — per-install, not source.
+.user.yml

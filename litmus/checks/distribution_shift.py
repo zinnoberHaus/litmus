@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from litmus.checks.history import HistoryStore
+from litmus.checks.history import HistoryStoreProtocol
 from litmus.checks.runner import CheckResult, CheckStatus
 from litmus.spec.metric_spec import DistributionShiftRule
 
@@ -13,7 +13,7 @@ def check_distribution_shift(
     rule: DistributionShiftRule,
     metric_name: str,
     current_mean: float | None,
-    history: HistoryStore | None,
+    history: HistoryStoreProtocol | None,
 ) -> CheckResult:
     """Report the relative change of ``AVG(column)`` against a prior record.
 

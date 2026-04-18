@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from litmus.checks.history import HistoryStore
+from litmus.checks.history import HistoryStoreProtocol
 from litmus.checks.runner import CheckResult, CheckStatus
 
 
@@ -18,7 +18,7 @@ def fingerprint(columns: list[str]) -> str:
 def check_schema_drift(
     metric_name: str,
     current_columns: list[str] | None,
-    history: HistoryStore | None,
+    history: HistoryStoreProtocol | None,
 ) -> CheckResult:
     """Compare the current column list to the most recent recorded fingerprint.
 

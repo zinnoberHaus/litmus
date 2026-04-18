@@ -1,0 +1,13 @@
+# Local-only profile. Points dbt at a DuckDB file in the project root so
+# `dbt deps && dbt run` works with zero credentials.
+#
+# To use: either copy to ~/.dbt/profiles.yml, or run dbt from this
+# directory after exporting DBT_PROFILES_DIR=$(pwd).
+
+litmus_example:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'warehouse.duckdb'
+      threads: 1

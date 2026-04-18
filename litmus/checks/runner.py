@@ -7,7 +7,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from litmus.checks.history import HistoryStore
+    from litmus.checks.history import HistoryStoreProtocol
     from litmus.connectors.base import BaseConnector
     from litmus.spec.metric_spec import MetricSpec
 
@@ -86,7 +86,7 @@ def run_checks(
     spec: MetricSpec,
     timestamp_column: str | None = None,
     value_column: str | None = None,
-    history: HistoryStore | None = None,
+    history: HistoryStoreProtocol | None = None,
     run_id: str | None = None,
     commit_sha: str | None = None,
 ) -> CheckSuite:
@@ -95,7 +95,9 @@ def run_checks(
     Parameters
     ----------
     history
-        Optional :class:`litmus.checks.history.HistoryStore`. When supplied,
+        Optional :class:`litmus.checks.history.HistoryStoreProtocol`. Either
+        the SQLite-backed :class:`HistoryStore` (default, local) or the
+        :class:`WarehouseHistoryStore` (shared, dbt-style). When supplied,
         each run records the current metric value + row count so that future
         ``change_rules`` can compare against history. Pass ``None`` to disable
         (equivalent to ``litmus check --no-history``).

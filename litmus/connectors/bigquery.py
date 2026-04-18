@@ -82,5 +82,28 @@ class BigQueryConnector(BaseConnector):
         )
         return [r["column_name"] for r in rows]
 
+    def create_history_tables(
+        self,
+        schema: str | None = None,
+        history_table: str = "litmus_history",
+    ) -> None:
+        """BigQuery requires fully qualified ``project.dataset.table`` and uses
+        STRING/FLOAT64/INT64 instead of VARCHAR/DOUBLE/BIGINT."""
+        dataset = schema or self._dataset
+        qualified = f"`{self._project}.{dataset}.{history_table}`"
+        ddl = (
+            f"CREATE TABLE IF NOT EXISTS {qualified} (\n"
+            "    metric_name        STRING  NOT NULL,\n"
+            "    value_sum          FLOAT64,\n"
+            "    row_count          INT64,\n"
+            "    recorded_at        STRING  NOT NULL,\n"
+            "    run_id             STRING,\n"
+            "    commit_sha         STRING,\n"
+            "    schema_fingerprint STRING,\n"
+            "    column_means_json  STRING\n"
+            ")"
+        )
+        self.execute_query(ddl)
+
     def close(self) -> None:
         self._client = None

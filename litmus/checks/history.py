@@ -1,10 +1,20 @@
-"""SQLite-backed history store for metric values across runs.
+"""History stores for metric values across runs.
 
-Enables ``ChangeRule`` checks (``Value must not change more than N% month over month``)
-by recording each run's metric value + row count and letting later runs compare
+Enables the stateful trust rules (``ChangeRule``, ``SchemaDriftRule``,
+``DistributionShiftRule``) by recording each run's metric value, row count,
+column fingerprint, and per-column means — and letting later runs compare
 against prior observations.
 
-Schema (auto-migrated; older DBs gain the newer columns via ``ALTER TABLE``):
+Two concrete backends ship today; both satisfy :class:`HistoryStoreProtocol`
+and are interchangeable from the runner's point of view.
+
+.. rubric:: :class:`HistoryStore` (the SQLite backend, default)
+
+Zero-config local file store, written to ``~/.litmus/history.db`` (overridable
+via ``$LITMUS_HISTORY_DB`` or the ``--history-db`` CLI flag). Best for solo
+engineers and one-box demos.
+
+Schema (auto-migrated; older DBs gain newer columns via ``ALTER TABLE``):
 
 .. code-block:: sql
 
@@ -20,6 +30,15 @@ Schema (auto-migrated; older DBs gain the newer columns via ``ALTER TABLE``):
         column_means_json  TEXT              -- JSON {col: AVG(col)}
     );
     CREATE INDEX idx_history_metric_time ON history (metric_name, recorded_at);
+
+.. rubric:: :class:`WarehouseHistoryStore` (the shared-team backend)
+
+Same interface, but writes to warehouse tables (``litmus_runs``,
+``litmus_check_results``) via the existing connector layer. This is the
+backend the ``dbt_packages/litmus/`` package materialises into — multiple
+runners across a team share the same history without passing SQLite files
+around. Opt in via ``litmus check --backend warehouse`` or auto-detect when
+a ``dbt_project.yml`` sits alongside ``litmus.yml``.
 """
 
 from __future__ import annotations
@@ -30,6 +49,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 DEFAULT_HISTORY_PATH = Path(
     os.environ.get("LITMUS_HISTORY_DB", "~/.litmus/history.db")
@@ -56,6 +76,39 @@ class HistoryRecord:
     column_means: dict[str, float | None] = field(default_factory=dict)
 
 
+@runtime_checkable
+class HistoryStoreProtocol(Protocol):
+    """The narrow surface the check runner depends on.
+
+    Both :class:`HistoryStore` (SQLite) and :class:`WarehouseHistoryStore`
+    satisfy this. Downstream code should type against this protocol, never
+    against a concrete class, so the CLI can pick the backend.
+    """
+
+    def connect(self) -> None: ...
+    def close(self) -> None: ...
+    def record(
+        self,
+        metric_name: str,
+        value_sum: float | None,
+        row_count: int | None,
+        run_id: str | None = ...,
+        commit_sha: str | None = ...,
+        recorded_at: datetime | None = ...,
+        schema_fingerprint: str | None = ...,
+        column_means: dict[str, float | None] | None = ...,
+    ) -> None: ...
+    def previous_record(
+        self,
+        metric_name: str,
+        period: str,
+        *,
+        now: datetime | None = ...,
+    ) -> HistoryRecord | None: ...
+    def last_record(self, metric_name: str) -> HistoryRecord | None: ...
+    def all_records(self, metric_name: str) -> list[HistoryRecord]: ...
+
+
 class HistoryStore:
     """SQLite-backed store for metric value history.
 
@@ -63,7 +116,7 @@ class HistoryStore:
 
         store = HistoryStore()  # defaults to ~/.litmus/history.db
         store.record("Monthly Revenue", value_sum=3_250_000.0, row_count=9)
-        prior = store.previous_value("Monthly Revenue", period="month")
+        prior = store.previous_record("Monthly Revenue", period="month")
     """
 
     def __init__(self, path: str | Path | None = None):
@@ -258,3 +311,26 @@ class HistoryStore:
             )
             for r in rows
         ]
+
+
+#: Canonical alias. Blueprint §3.2 renames the class to ``SqliteHistoryStore``
+#: so that the CLI's ``--backend sqlite`` choice maps to a named type; the
+#: original ``HistoryStore`` name is preserved as a first-class symbol for
+#: every existing caller (tests, docs, user scripts).
+SqliteHistoryStore = HistoryStore
+
+
+# Re-export the warehouse backend at the package boundary so callers can do
+# ``from litmus.checks.history import WarehouseHistoryStore``. Keep the import
+# at the bottom: ``history_warehouse`` imports ``HistoryRecord`` and
+# ``_PERIOD_DAYS`` from this module, so ordering matters.
+from litmus.checks.history_warehouse import WarehouseHistoryStore  # noqa: E402,F401
+
+__all__ = [
+    "DEFAULT_HISTORY_PATH",
+    "HistoryRecord",
+    "HistoryStore",
+    "HistoryStoreProtocol",
+    "SqliteHistoryStore",
+    "WarehouseHistoryStore",
+]

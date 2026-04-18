@@ -1,0 +1,22 @@
+# Points Litmus at the same DuckDB file dbt materialises into.
+# Running `litmus check metrics/ --backend warehouse` after `dbt run`
+# writes trust results into litmus_history in the same database.
+
+version: 1
+metrics_dir: metrics/
+
+warehouse:
+  type: duckdb
+  database: warehouse.duckdb
+  # DuckDB's default schema is `main`, not `public`. Override here so
+  # WarehouseHistoryStore creates `main.litmus_history` to match dbt.
+  schema: main
+
+defaults:
+  freshness: 24 hours
+  null_rate: 5%
+  volume_change: 25%
+
+reporting:
+  format: console
+  colors: true

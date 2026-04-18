@@ -77,6 +77,44 @@ class BaseConnector(ABC):
             return list(rows[0].keys())
         return []
 
+    # ------------------------------------------------------------------ history
+    def create_history_tables(
+        self,
+        schema: str | None = None,
+        history_table: str = "litmus_history",
+    ) -> None:
+        """Idempotently create the warehouse history table used by
+        :class:`litmus.checks.history.WarehouseHistoryStore`.
+
+        Dialect notes:
+          * DuckDB, Postgres, SQLite — ``CREATE TABLE IF NOT EXISTS`` works natively.
+          * Snowflake — same syntax; VARCHAR without a length defaults to 16MB.
+          * BigQuery — standard SQL supports ``IF NOT EXISTS``. ``VARCHAR``
+            aliases to ``STRING``.
+
+        We deliberately use only ANSI-ish types (VARCHAR, DOUBLE/FLOAT, BIGINT)
+        that survive every adapter without per-dialect overrides. Connectors
+        override this method when their adapter requires tweaks (e.g. BigQuery
+        type names, schema qualification).
+        """
+        qualified = f"{schema}.{history_table}" if schema else history_table
+        # ``DOUBLE PRECISION`` is the ANSI form: Postgres requires it, DuckDB
+        # + Snowflake accept it. ``VARCHAR(N)`` without a length works in
+        # Snowflake but not Postgres, so we pin lengths.
+        ddl = (
+            f"CREATE TABLE IF NOT EXISTS {qualified} (\n"
+            "    metric_name        VARCHAR(500) NOT NULL,\n"
+            "    value_sum          DOUBLE PRECISION,\n"
+            "    row_count          BIGINT,\n"
+            "    recorded_at        VARCHAR(64) NOT NULL,\n"
+            "    run_id             VARCHAR(128),\n"
+            "    commit_sha         VARCHAR(128),\n"
+            "    schema_fingerprint VARCHAR(4000),\n"
+            "    column_means_json  VARCHAR(16000)\n"
+            ")"
+        )
+        self.execute_query(ddl)
+
     @abstractmethod
     def close(self) -> None:
         """Close the connection."""

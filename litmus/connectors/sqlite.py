@@ -81,6 +81,29 @@ class SQLiteConnector(BaseConnector):
         cur = conn.execute(f"PRAGMA table_info({table})")
         return [row["name"] for row in cur.fetchall()]
 
+    def create_history_tables(
+        self,
+        schema: str | None = None,
+        history_table: str = "litmus_history",
+    ) -> None:
+        """SQLite uses type affinity — the default VARCHAR(N)/BIGINT DDL works,
+        but we swap in TEXT/REAL/INTEGER for canonical SQLite idiom and drop
+        the schema prefix (``database.table`` in SQLite means *attached DB*,
+        which isn't what callers mean)."""
+        ddl = (
+            f"CREATE TABLE IF NOT EXISTS {history_table} (\n"
+            "    metric_name        TEXT    NOT NULL,\n"
+            "    value_sum          REAL,\n"
+            "    row_count          INTEGER,\n"
+            "    recorded_at        TEXT    NOT NULL,\n"
+            "    run_id             TEXT,\n"
+            "    commit_sha         TEXT,\n"
+            "    schema_fingerprint TEXT,\n"
+            "    column_means_json  TEXT\n"
+            ")"
+        )
+        self.execute_query(ddl)
+
     def close(self) -> None:
         if self._conn is not None:
             self._conn.close()

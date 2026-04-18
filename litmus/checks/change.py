@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from litmus.checks.history import HistoryStore
+from litmus.checks.history import HistoryStoreProtocol
 from litmus.checks.runner import CheckResult, CheckStatus
 from litmus.spec.metric_spec import ChangeRule
 
@@ -13,7 +13,7 @@ def check_change(
     rule: ChangeRule,
     metric_name: str,
     current_value: float | None,
-    history: HistoryStore | None,
+    history: HistoryStoreProtocol | None,
 ) -> CheckResult:
     """Compare ``current_value`` against the most recent value from ``rule.period`` ago.
 

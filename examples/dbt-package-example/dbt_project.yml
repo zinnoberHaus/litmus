@@ -1,0 +1,37 @@
+# Minimal dbt project demonstrating Litmus as a dbt package.
+#
+# Quickstart (DuckDB — no warehouse account needed):
+#
+#   cd examples/dbt-package-example
+#   dbt deps                # pulls in the local Litmus package
+#   dbt seed                # seeds the demo orders table
+#   dbt run                 # materialises your models + runs litmus.run_trust_checks
+#   dbt test                # (your own tests; Litmus does NOT replace dbt test)
+#
+# Then run the Python trust checks against the same warehouse:
+#
+#   litmus check metrics/ --backend warehouse
+
+name: 'litmus_example'
+version: '1.0.0'
+config-version: 2
+
+profile: 'litmus_example'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+
+# Fire the Litmus on-run-end hook. This creates the litmus_runs,
+# litmus_check_results, and litmus_history tables (idempotent) and records
+# the dbt run marker.
+on-run-end:
+  - "{{ litmus.run_trust_checks() }}"
+
+models:
+  litmus_example:
+    +materialized: table
+  litmus:
+    # Keep the Litmus tables alongside everything else in dev. Uncomment to
+    # write them to a separate `<schema>_litmus` schema Elementary-style:
+    #   +schema: litmus
+    +materialized: view
