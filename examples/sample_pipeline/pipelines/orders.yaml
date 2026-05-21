@@ -1,0 +1,18 @@
+source:
+  type: csv
+  path: ./data/raw/orders.csv
+
+target:
+  table: raw_orders
+  mode: replace
+  primary_key: order_id
+
+schedule: daily
+
+columns:
+  - { name: order_id,    type: VARCHAR }
+  - { name: customer_id, type: VARCHAR }
+  - { name: product,     type: VARCHAR }
+  - { name: amount,      type: DOUBLE  }
+  - { name: order_at,    type: TIMESTAMP }
+  - { name: status,      type: VARCHAR }

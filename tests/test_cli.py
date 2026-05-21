@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from textwrap import dedent
 
@@ -186,6 +187,38 @@ class TestInitCommand:
             assert Path("sqlproj/demo.sqlite").exists()
             cfg = Path("sqlproj/litmus.yml").read_text()
             assert "type: sqlite" in cfg
+
+    def test_init_installs_agent_team(self, runner: CliRunner, tmp_path: Path):
+        """`litmus init` incorporates the agent team into the repo — the
+        same scaffold the bare-`litmus` TUI lays down.
+        """
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(main, ["init", "--yes"])
+            assert result.exit_code == 0, result.output
+            # Agent team scaffold landed.
+            assert Path(".claude/agents").is_dir()
+            assert any(Path(".claude/agents").glob("*.md"))
+            assert Path(".claude/skills").is_dir()
+            assert Path(".mcp.json").exists()
+            assert Path("AGENTS.md").exists()
+            # Project marked initialized so bare `litmus` skips bootstrap.
+            assert Path(".litmus/state.json").exists()
+            state = json.loads(Path(".litmus/state.json").read_text())
+            assert state["initialized"] is True
+
+    def test_init_subdir_does_not_leak_team_into_cwd(
+        self, runner: CliRunner, tmp_path: Path
+    ):
+        """`litmus init <name>` keeps the team scaffold inside the subdir."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(main, ["init", "teamproj", "--yes"])
+            assert result.exit_code == 0, result.output
+            assert Path("teamproj/.claude/agents").is_dir()
+            assert Path("teamproj/.mcp.json").exists()
+            assert Path("teamproj/.litmus/state.json").exists()
+            # Nothing leaked into cwd.
+            assert not Path(".claude").exists()
+            assert not Path(".mcp.json").exists()
 
 
 # ---------------------------------------------------------------------------

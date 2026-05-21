@@ -1,0 +1,119 @@
+transaction_id,customer_id,market_id,product,amount,currency,transacted_at,status
+t_0001,c_001,m_us,Pro Plan,99.00,USD,2025-02-01T09:14:00,paid
+t_0002,c_002,m_latam,Starter,29.00,USD,2025-02-01T10:32:00,paid
+t_0003,c_003,m_eu,Pro Plan,89.00,EUR,2025-02-01T14:08:00,paid
+t_0004,c_004,m_apac,Team Plan,299.00,USD,2025-02-02T11:25:00,paid
+t_0005,c_005,m_eu,Starter,25.00,EUR,2025-02-02T13:50:00,paid
+t_0006,c_006,m_eu,Pro Plan,89.00,EUR,2025-02-03T08:42:00,paid
+t_0007,c_007,m_eu,Team Plan,269.00,EUR,2025-02-03T16:15:00,refunded
+t_0008,c_008,m_apac,Starter,29.00,USD,2025-02-04T09:00:00,paid
+t_0009,c_009,m_uk,Pro Plan,79.00,GBP,2025-02-04T11:22:00,paid
+t_0010,c_010,m_latam,Team Plan,299.00,USD,2025-02-05T14:48:00,paid
+t_0011,c_011,m_eu,Starter,25.00,EUR,2025-02-05T17:30:00,paid
+t_0012,c_012,m_eu,Pro Plan,89.00,EUR,2025-02-06T10:18:00,paid
+t_0013,c_013,m_apac,Pro Plan,99.00,USD,2025-02-06T12:42:00,paid
+t_0014,c_014,m_eu,Team Plan,269.00,EUR,2025-02-07T09:14:00,paid
+t_0015,c_015,m_eu,Starter,25.00,EUR,2025-02-07T11:50:00,paid
+t_0016,c_016,m_latam,Pro Plan,99.00,USD,2025-02-08T08:36:00,paid
+t_0017,c_017,m_apac,Team Plan,299.00,USD,2025-02-08T13:24:00,paid
+t_0018,c_018,m_eu,Starter,25.00,EUR,2025-02-09T15:50:00,paid
+t_0019,c_019,m_eu,Pro Plan,89.00,EUR,2025-02-09T17:10:00,paid
+t_0020,c_020,m_apac,Pro Plan,99.00,USD,2025-02-10T09:48:00,paid
+t_0021,c_021,m_eu,Team Plan,269.00,EUR,2025-02-10T14:30:00,paid
+t_0022,c_022,m_apac,Starter,29.00,USD,2025-02-11T08:22:00,paid
+t_0023,c_001,m_us,Add-on Storage,15.00,USD,2025-02-11T10:08:00,paid
+t_0024,c_023,m_apac,Pro Plan,99.00,USD,2025-02-11T13:42:00,paid
+t_0025,c_024,m_apac,Starter,29.00,USD,2025-02-12T09:30:00,paid
+t_0026,c_025,m_eu,Pro Plan,89.00,EUR,2025-02-12T16:18:00,paid
+t_0027,c_026,m_apac,Team Plan,299.00,USD,2025-02-13T11:00:00,paid
+t_0028,c_002,m_latam,Add-on Storage,15.00,USD,2025-02-13T14:36:00,paid
+t_0029,c_027,m_eu,Pro Plan,89.00,EUR,2025-02-14T08:50:00,paid
+t_0030,c_028,m_eu,Starter,25.00,EUR,2025-02-14T12:24:00,paid
+t_0031,c_029,m_us,Team Plan,299.00,USD,2025-02-15T09:18:00,paid
+t_0032,c_030,m_apac,Pro Plan,99.00,USD,2025-02-15T13:42:00,paid
+t_0033,c_004,m_apac,Add-on Storage,15.00,USD,2025-02-16T10:12:00,paid
+t_0034,c_005,m_eu,Pro Plan,89.00,EUR,2025-02-16T15:30:00,paid
+t_0035,c_006,m_eu,Team Plan,269.00,EUR,2025-02-17T08:48:00,paid
+t_0036,c_007,m_eu,Starter,25.00,EUR,2025-02-17T11:24:00,paid
+t_0037,c_008,m_apac,Pro Plan,99.00,USD,2025-02-18T09:36:00,paid
+t_0038,c_009,m_uk,Team Plan,249.00,GBP,2025-02-18T14:18:00,paid
+t_0039,c_010,m_latam,Add-on Storage,15.00,USD,2025-02-19T10:42:00,paid
+t_0040,c_011,m_eu,Pro Plan,89.00,EUR,2025-02-19T16:00:00,paid
+t_0041,c_012,m_eu,Team Plan,269.00,EUR,2025-02-20T08:30:00,paid
+t_0042,c_013,m_apac,Starter,29.00,USD,2025-02-20T12:50:00,paid
+t_0043,c_014,m_eu,Pro Plan,89.00,EUR,2025-02-21T09:14:00,paid
+t_0044,c_015,m_eu,Team Plan,269.00,EUR,2025-02-21T15:36:00,refunded
+t_0045,c_016,m_latam,Pro Plan,99.00,USD,2025-02-22T11:08:00,paid
+t_0046,c_017,m_apac,Starter,29.00,USD,2025-02-22T14:24:00,paid
+t_0047,c_018,m_eu,Pro Plan,89.00,EUR,2025-02-23T08:48:00,paid
+t_0048,c_019,m_eu,Team Plan,269.00,EUR,2025-02-23T13:30:00,paid
+t_0049,c_020,m_apac,Add-on Storage,15.00,USD,2025-02-24T10:18:00,paid
+t_0050,c_021,m_eu,Pro Plan,89.00,EUR,2025-02-24T15:48:00,paid
+t_0051,c_022,m_apac,Team Plan,299.00,USD,2025-02-25T09:00:00,paid
+t_0052,c_023,m_apac,Starter,29.00,USD,2025-02-25T12:36:00,paid
+t_0053,c_024,m_apac,Pro Plan,99.00,USD,2025-02-26T11:14:00,paid
+t_0054,c_025,m_eu,Team Plan,269.00,EUR,2025-02-26T16:42:00,paid
+t_0055,c_026,m_apac,Starter,29.00,USD,2025-02-27T08:22:00,paid
+t_0056,c_027,m_eu,Pro Plan,89.00,EUR,2025-02-27T14:08:00,paid
+t_0057,c_028,m_eu,Pro Plan,89.00,EUR,2025-02-28T09:50:00,paid
+t_0058,c_029,m_us,Team Plan,299.00,USD,2025-02-28T13:24:00,paid
+t_0059,c_030,m_apac,Starter,29.00,USD,2025-03-01T10:42:00,paid
+t_0060,c_001,m_us,Pro Plan,99.00,USD,2025-03-01T14:18:00,paid
+t_0061,c_002,m_latam,Team Plan,299.00,USD,2025-03-02T08:30:00,paid
+t_0062,c_003,m_eu,Starter,25.00,EUR,2025-03-02T12:50:00,paid
+t_0063,c_004,m_apac,Pro Plan,99.00,USD,2025-03-03T09:14:00,paid
+t_0064,c_005,m_eu,Add-on Storage,15.00,EUR,2025-03-03T15:36:00,paid
+t_0065,c_006,m_eu,Pro Plan,89.00,EUR,2025-03-04T11:08:00,paid
+t_0066,c_007,m_eu,Team Plan,269.00,EUR,2025-03-04T14:24:00,paid
+t_0067,c_008,m_apac,Starter,29.00,USD,2025-03-05T08:48:00,paid
+t_0068,c_009,m_uk,Pro Plan,79.00,GBP,2025-03-05T13:30:00,paid
+t_0069,c_010,m_latam,Team Plan,299.00,USD,2025-03-06T10:18:00,paid
+t_0070,c_011,m_eu,Pro Plan,89.00,EUR,2025-03-06T15:48:00,paid
+t_0071,c_012,m_eu,Starter,25.00,EUR,2025-03-07T09:00:00,paid
+t_0072,c_013,m_apac,Team Plan,299.00,USD,2025-03-07T13:42:00,paid
+t_0073,c_014,m_eu,Pro Plan,89.00,EUR,2025-03-08T08:30:00,paid
+t_0074,c_015,m_eu,Add-on Storage,15.00,EUR,2025-03-08T11:50:00,paid
+t_0075,c_016,m_latam,Pro Plan,99.00,USD,2025-03-09T10:14:00,paid
+t_0076,c_017,m_apac,Team Plan,299.00,USD,2025-03-09T15:36:00,paid
+t_0077,c_018,m_eu,Pro Plan,89.00,EUR,2025-03-10T08:48:00,paid
+t_0078,c_019,m_eu,Starter,25.00,EUR,2025-03-10T13:24:00,paid
+t_0079,c_001,m_us,Team Plan,299.00,USD,2025-03-11T09:50:00,paid
+t_0080,c_002,m_latam,Pro Plan,99.00,USD,2025-03-11T14:18:00,paid
+t_0081,c_004,m_apac,Pro Plan,99.00,USD,2025-03-12T08:30:00,paid
+t_0082,c_009,m_uk,Add-on Storage,12.00,GBP,2025-03-12T12:50:00,paid
+t_0083,c_011,m_eu,Pro Plan,89.00,EUR,2025-03-13T10:14:00,paid
+t_0084,c_017,m_apac,Pro Plan,99.00,USD,2025-03-14T15:36:00,paid
+t_0085,c_021,m_eu,Team Plan,269.00,EUR,2025-03-15T11:08:00,paid
+t_0086,c_024,m_apac,Pro Plan,99.00,USD,2025-03-16T14:24:00,paid
+t_0087,c_026,m_apac,Team Plan,299.00,USD,2025-03-18T09:50:00,paid
+t_0088,c_029,m_us,Pro Plan,99.00,USD,2025-03-20T13:30:00,paid
+t_0089,c_003,m_eu,Pro Plan,89.00,EUR,2025-03-22T11:14:00,paid
+t_0090,c_010,m_latam,Add-on Storage,15.00,USD,2025-03-24T16:42:00,paid
+t_0091,c_013,m_apac,Pro Plan,99.00,USD,2025-03-26T08:22:00,paid
+t_0092,c_018,m_eu,Team Plan,269.00,EUR,2025-03-28T14:08:00,paid
+t_0093,c_022,m_apac,Pro Plan,99.00,USD,2025-03-30T09:50:00,paid
+t_0094,c_028,m_eu,Pro Plan,89.00,EUR,2025-04-01T13:24:00,paid
+t_0095,c_005,m_eu,Team Plan,269.00,EUR,2025-04-03T10:42:00,paid
+t_0096,c_012,m_eu,Pro Plan,89.00,EUR,2025-04-05T14:18:00,paid
+t_0097,c_020,m_apac,Pro Plan,99.00,USD,2025-04-08T08:30:00,paid
+t_0098,c_023,m_apac,Team Plan,299.00,USD,2025-04-10T12:50:00,paid
+t_0099,c_027,m_eu,Pro Plan,89.00,EUR,2025-04-12T09:14:00,paid
+t_0100,c_001,m_us,Add-on Storage,15.00,USD,2025-04-15T15:36:00,paid
+t_0101,c_004,m_apac,Pro Plan,99.00,USD,2025-04-17T11:08:00,paid
+t_0102,c_009,m_uk,Team Plan,249.00,GBP,2025-04-19T14:24:00,paid
+t_0103,c_011,m_eu,Pro Plan,89.00,EUR,2025-04-21T08:48:00,paid
+t_0104,c_014,m_eu,Team Plan,269.00,EUR,2025-04-23T13:30:00,paid
+t_0105,c_017,m_apac,Pro Plan,99.00,USD,2025-04-25T10:18:00,paid
+t_0106,c_021,m_eu,Team Plan,269.00,EUR,2025-04-27T15:48:00,paid
+t_0107,c_024,m_apac,Pro Plan,99.00,USD,2025-04-29T09:00:00,paid
+t_0108,c_026,m_apac,Starter,29.00,USD,2025-05-01T12:36:00,paid
+t_0109,c_029,m_us,Pro Plan,99.00,USD,2025-05-03T11:14:00,paid
+t_0110,c_003,m_eu,Team Plan,269.00,EUR,2025-05-05T16:42:00,paid
+t_0111,c_010,m_latam,Pro Plan,99.00,USD,2025-05-07T08:22:00,paid
+t_0112,c_013,m_apac,Add-on Storage,15.00,USD,2025-05-09T14:08:00,paid
+t_0113,c_018,m_eu,Pro Plan,89.00,EUR,2025-05-11T09:50:00,paid
+t_0114,c_022,m_apac,Team Plan,299.00,USD,2025-05-13T13:24:00,paid
+t_0115,c_028,m_eu,Pro Plan,89.00,EUR,2025-05-15T10:42:00,paid
+t_0116,c_005,m_eu,Pro Plan,89.00,EUR,2025-05-16T14:18:00,paid
+t_0117,c_012,m_eu,Team Plan,269.00,EUR,2025-05-17T09:30:00,paid
+t_0118,c_020,m_apac,Pro Plan,99.00,USD,2025-05-18T13:42:00,paid

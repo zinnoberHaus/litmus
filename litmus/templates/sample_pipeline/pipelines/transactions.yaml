@@ -1,0 +1,8 @@
+source:
+  type: csv
+  path: ./data/raw/transactions.csv
+target:
+  table: raw_transactions
+  mode: replace
+  primary_key: transaction_id
+schedule: daily

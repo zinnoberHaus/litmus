@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import click
@@ -26,17 +27,49 @@ def _detect_dbt_project(start: Path | None = None) -> bool:
     return False
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="litmus")
-def main():
-    """Litmus — canonical metric contracts with built-in data trust checks.
+@click.pass_context
+def main(ctx: click.Context) -> None:
+    """Litmus — AI-agent-driven data engineering for teams without a data team.
 
     \b
-    Three audiences, one spec:
-      engineers  — .metric / YAML contracts, run via CLI, dbt package, or CI
-      PMs        — Slack sign-off + /ask (v0.3)
-      everyone   — embeddable trust badges
+    Agent-driven workflow (open this repo in Claude Code):
+      @data-architect    designs schemas + plans pipelines
+      @pipeline-builder  writes ingest + transforms with trust contracts
+      @analyst           builds Streamlit dashboards, answers questions
+      @code-reviewer     gates merges on the non-negotiables
+      @ops-pilot         syncs Notion + Linear
+
+    \b
+    Trust-engine commands:
+      litmus init        scaffold a new project
+      litmus check       run trust checks against the warehouse
+      litmus parse       debug: dump parsed MetricSpec
+      litmus explain     plain-English doc for a metric
+
+    \b
+    Orchestration commands:
+      litmus demo            load + run the sample ontology pipeline
+      litmus add <csv>       register a CSV source in one shot
+      litmus ask <q>         ask the agent team — stays in your terminal
+      litmus connect <svc>   set up Notion / Linear / Anthropic / Slack
+      litmus ingest          run an ingest pipeline
+      litmus transform       run a transform
+      litmus dashboard       open the Streamlit dashboards
+      litmus run             run everything (ingest -> transform -> trust)
+      litmus doctor          diagnose setup
+
+    Running `litmus` with no subcommand drops into an interactive TUI
+    that bootstraps the project and points you at next actions.
     """
+    if ctx.invoked_subcommand is None:
+        from litmus.tui import is_tty, run_tui
+
+        if is_tty():
+            run_tui()
+        else:
+            click.echo(ctx.get_help())
 
 
 # ── litmus check ────────────────────────────────────────────────────
@@ -716,23 +749,73 @@ def init(
             _seed_sqlite(db_file)
             created.append(f"{database:32s} — seeded demo data (8 orders)")
 
+    # Incorporate the Litmus agent team into the repo. This is what turns
+    # `litmus init` into "create a Litmus team here" rather than a bare metrics
+    # scaffold — it lays down the same .claude/ + .mcp.json + AGENTS.md that the
+    # interactive `litmus` TUI installs, so the two entry points agree.
+    from litmus.scaffold import install_agent_team
+
+    team = install_agent_team(target, force=force)
+    if team["agents"]:
+        created.append(f"{'.claude/agents/':32s} — {team['agents']} data-team agents")
+    if team["skills"]:
+        created.append(f"{'.claude/skills/':32s} — {team['skills']} workflow skills")
+    if team["mcp"]:
+        created.append(f"{'.mcp.json':32s} — Notion + Linear MCP wiring")
+    if team["docs"]:
+        created.append(f"{'AGENTS.md':32s} — agent team guide")
+
+    # Mark the project initialized so a later bare `litmus` lands straight in
+    # agent mode instead of re-running the bootstrap wizard.
+    import json
+
+    state_file = target / ".litmus" / "state.json"
+    if force or not state_file.exists():
+        if warehouse in ("duckdb", "sqlite"):
+            warehouse_url = f"{warehouse}:///./{database}"
+        else:
+            warehouse_url = f"{warehouse}://{database}"
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(
+            json.dumps(
+                {
+                    "initialized": True,
+                    "project_name": display_name,
+                    "warehouse_type": warehouse,
+                    "warehouse_url": warehouse_url,
+                    "version": __version__,
+                    "created_by": "litmus init",
+                },
+                indent=2,
+            )
+        )
+        created.append(f"{'.litmus/state.json':32s} — project state")
+
     console.print()
     if created:
         console.print("[bold green]Created:[/bold green]")
         for item in created:
             console.print(f"  {item}")
+    in_subdir = bool(project_name and project_name != ".")
+    cd_prefix = f"cd {project_name} && " if in_subdir else ""
+    cd_hint = f"cd {project_name}, then " if in_subdir else ""
+
     console.print()
+    console.print("[bold green]Your Litmus team is set up in this repo.[/bold green]")
+    console.print()
+    console.print("[bold]Talk to the team[/bold] — open this directory in Claude Code and ask:")
+    console.print(
+        "  [cyan]@data-architect[/cyan] I want a daily revenue dashboard for the founder"
+    )
+    console.print(
+        f"  [dim]…or {cd_hint}run [cyan]litmus[/cyan] for the interactive agent console.[/dim]"
+    )
+    console.print()
+    console.print("[bold]Or use the trust engine directly:[/bold]")
     if warehouse in ("duckdb", "sqlite"):
-        if project_name and project_name != ".":
-            console.print(
-                f"[bold]Next:[/bold]  cd {project_name} && litmus check metrics/"
-            )
-        else:
-            console.print("[bold]Next:[/bold]  litmus check metrics/")
+        console.print(f"  {cd_prefix}litmus check metrics/")
     else:
-        prefix = f"cd {project_name} && " if project_name and project_name != "." else ""
-        console.print("[bold]Next steps:[/bold]")
-        console.print(f"  1. {prefix}cp .env.example .env")
+        console.print(f"  1. {cd_prefix}cp .env.example .env")
         console.print("  2. Fill in credentials in .env and the connection in litmus.yml")
         console.print("  3. source .env && litmus check metrics/")
     console.print()
@@ -1138,7 +1221,7 @@ def report(directory: str, output_format: str, output: str | None, config: str |
     finally:
         connector.close()
 
-    generators = {
+    generators: dict[str, Callable[..., str]] = {
         "html": generate_html_report,
         "markdown": generate_markdown_report,
         "json": generate_json_report,
@@ -1342,6 +1425,250 @@ def reconcile(
             str(notes),
         )
     console.print(table)
+
+
+# ── orchestration commands ──────────────────────────────────────────
+# litmus ingest / transform / dashboard / demo / run / doctor
+# (Heavy imports are kept inside each command so `litmus --help` stays fast.)
+
+
+@main.command()
+@click.argument("pipeline_name", required=False)
+def ingest(pipeline_name: str | None) -> None:
+    """Run an ingest pipeline (or list available pipelines)."""
+    from litmus.pipelines.runner import list_pipelines, run_ingest
+
+    if not pipeline_name:
+        for p in list_pipelines():
+            click.echo(f"  {p.stem}")
+        return
+
+    run_ingest(pipeline_name)
+
+
+@main.command()
+@click.argument("source", type=click.Path(exists=True, dir_okay=False, readable=True))
+@click.option(
+    "--name", "-n",
+    default=None,
+    help="Source name. Defaults to the file stem (e.g. 'customers' for customers.csv).",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["replace", "append"]),
+    default="replace",
+    show_default=True,
+    help="Ingest mode for re-runs.",
+)
+def add(source: str, name: str | None, mode: str) -> None:
+    """Register a new data source from a file path. One-shot: copy → spec → ingest.
+
+    \b
+    Examples:
+      litmus add ~/Downloads/customers.csv
+      litmus add ./stripe-charges.csv --name stripe_charges
+      litmus add /tmp/events.csv --mode append
+    """
+    import shutil as _shutil
+    from pathlib import Path as _Path
+
+    import yaml
+
+    src = _Path(source).expanduser().resolve()
+    if src.suffix.lower() != ".csv":
+        click.echo(
+            f"Only .csv is supported in v0.4 (got {src.suffix or '<no extension>'}). "
+            "Postgres / Stripe / REST are on the M2 roadmap."
+        )
+        sys.exit(1)
+
+    stem = name or src.stem.replace("-", "_").replace(" ", "_").lower()
+    table = f"raw_{stem}"
+
+    # 1. Copy CSV into the project's data/raw/ (idempotent).
+    raw_dir = _Path("data/raw")
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    dest_csv = raw_dir / src.name
+    if dest_csv.resolve() != src:
+        _shutil.copy(src, dest_csv)
+    click.echo(f"  ✓ copied {src.name} → data/raw/")
+
+    # 2. Generate the ingest spec.
+    pipelines_dir = _Path("pipelines")
+    pipelines_dir.mkdir(exist_ok=True)
+    spec_path = pipelines_dir / f"{stem}.yaml"
+    spec = {
+        "source": {"type": "csv", "path": f"./data/raw/{src.name}"},
+        "target": {"table": table, "mode": mode},
+        "schedule": "manual",
+    }
+    spec_path.write_text(yaml.safe_dump(spec, sort_keys=False))
+    click.echo(f"  ✓ wrote {spec_path}")
+
+    # 3. Run the first ingest.
+    from litmus.pipelines.runner import run_ingest
+
+    rows = run_ingest(stem)
+
+    click.echo("")
+    click.echo("Source registered. Next steps:")
+    sample_q = f"SELECT * FROM {table} LIMIT 5"
+    click.echo(f"  • Query it:        duckdb data/warehouse.duckdb -c '{sample_q}'")
+    click.echo(f"  • Build a mart:    ask @pipeline-builder for a transform on {table}")
+    click.echo(f"  • Re-run:          litmus ingest {stem}")
+    _ = rows  # currently unused; future: surface schema
+
+
+@main.command()
+@click.argument("transform_name", required=False)
+def transform(transform_name: str | None) -> None:
+    """Run a SQL transform (or list available transforms)."""
+    from litmus.pipelines.runner import list_transforms, run_transform
+
+    if not transform_name:
+        for t in list_transforms():
+            click.echo(f"  {t.stem}")
+        return
+
+    run_transform(transform_name)
+
+
+@main.command()
+@click.option("--port", default=8501, show_default=True)
+def dashboard(port: int) -> None:
+    """Start the Streamlit dashboard server."""
+    import subprocess
+
+    dashboards_dir = Path("dashboards")
+    if not dashboards_dir.exists() or not any(dashboards_dir.glob("*.py")):
+        click.echo("No dashboards found in dashboards/.")
+        click.echo("Ask the analyst agent to scaffold one: '/litmus-dashboard <name>'")
+        sys.exit(1)
+
+    home = dashboards_dir / "home.py"
+    target = home if home.exists() else next(dashboards_dir.glob("*.py"))
+
+    click.echo(f"Starting Streamlit at http://localhost:{port}/  (serving {target})")
+    subprocess.run(["streamlit", "run", str(target), "--server.port", str(port)])
+
+
+@main.command()
+def demo() -> None:
+    """Run the sample e-commerce pipeline end-to-end."""
+    import os
+
+    from litmus.pipelines.sample import run_demo
+
+    warehouse = os.environ.get(
+        "LITMUS_WAREHOUSE_URL", "duckdb:///./data/warehouse.duckdb"
+    )
+    run_demo(warehouse)
+    click.echo("Demo complete. Run: litmus dashboard")
+
+
+@main.command()
+def run() -> None:
+    """Run everything: every pipeline, every transform, every trust check."""
+    from litmus.pipelines.runner import run_all
+
+    run_all()
+
+
+@main.command()
+def doctor() -> None:
+    """Diagnose setup — warehouse reachable, MCP servers configured, secrets present."""
+    from litmus.diagnostics import run_doctor
+
+    ok = run_doctor()
+    sys.exit(0 if ok else 1)
+
+
+@main.command()
+@click.argument(
+    "service",
+    type=click.Choice(
+        ["notion", "linear", "anthropic", "slack"], case_sensitive=False
+    ),
+)
+def connect(service: str) -> None:
+    """Wire up an integration after init. Prompts for the key, writes .env.
+
+    \b
+    Examples:
+      litmus connect notion
+      litmus connect linear
+      litmus connect anthropic
+      litmus connect slack
+    """
+    from litmus.tui import _write_env_file
+
+    service = service.lower()
+    spec = {
+        "notion": {
+            "env_var": "NOTION_API_KEY",
+            "url": "https://notion.so/profile/integrations",
+            "label": "Notion API key",
+        },
+        "linear": {
+            "env_var": "LINEAR_API_KEY",
+            "url": "https://linear.app/settings/api",
+            "label": "Linear API key",
+        },
+        "anthropic": {
+            "env_var": "LITMUS_ANTHROPIC_API_KEY",
+            "url": "https://console.anthropic.com/settings/keys",
+            "label": "Anthropic API key",
+        },
+        "slack": {
+            "env_var": "LITMUS_SLACK_WEBHOOK_URL",
+            "url": "https://api.slack.com/messaging/webhooks",
+            "label": "Slack incoming webhook URL",
+        },
+    }[service]
+
+    click.echo(f"Get a {service.title()} key here: {spec['url']}")
+    value = click.prompt(spec["label"], default="", show_default=False, hide_input=True).strip()
+    if not value:
+        click.echo("(nothing entered — aborted)")
+        return
+
+    _write_env_file({spec["env_var"]: value})
+    click.echo(f"✓ wrote {spec['env_var']} to .env (chmod 600).")
+
+
+@main.command()
+@click.argument("prompt", nargs=-1, required=True)
+def ask(prompt: tuple[str, ...]) -> None:
+    """Ask the agent team a question. Stays in your terminal.
+
+    \b
+    Examples:
+      litmus ask "@analyst what is our top customer by revenue?"
+      litmus ask "@pipeline-builder build a daily revenue rollup"
+      litmus ask "@data-architect what schema do I need for churn?"
+
+    The agents read/write files in your current directory. cwd must be
+    a Litmus project (run `litmus` first if it isn't).
+    """
+    import shutil
+    import subprocess
+
+    from litmus.tui import DATA_ENGINEERING_SCOPE
+
+    if not shutil.which("claude"):
+        click.echo(
+            "Claude Code is not installed. Get it at https://claude.ai/code "
+            "(free), then re-run."
+        )
+        sys.exit(1)
+
+    text = " ".join(prompt)
+    result = subprocess.run([
+        "claude", "--print", text,
+        "--append-system-prompt", DATA_ENGINEERING_SCOPE,
+        "--allow-dangerously-skip-permissions",
+    ])
+    sys.exit(result.returncode)
 
 
 if __name__ == "__main__":

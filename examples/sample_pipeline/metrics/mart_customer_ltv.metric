@@ -1,0 +1,22 @@
+Metric: Customer LTV
+Description: Lifetime revenue per customer, joining raw_orders to raw_customers.
+Owner: pipeline-builder
+Tags: customers, ltv, sample
+
+Source: mart_customer_ltv
+
+Given the customer exists in raw_customers
+  And we sum revenue across all of their paid orders
+
+When we calculate
+  Then sum the amount column for paid orders
+  And group by customer_id
+
+The result is "Customer Lifetime Revenue"
+
+Trust:
+  Freshness must be less than 24 hours
+  Null rate on customer_id must be 0%
+  Row count must not drop more than 30% week over week
+  Value must be between 0 and 10000
+  Duplicate rate on customer_id must be 0%

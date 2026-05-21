@@ -1,0 +1,19 @@
+{
+  "_comment": "DataPilot MCP servers — wired so any contributor who clones the repo and opens it in Claude Code gets Notion + Linear out of the box. Required env vars are documented in .env.example.",
+  "mcpServers": {
+    "notion": {
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "env": {
+        "OPENAPI_MCP_HEADERS": "{\"Authorization\": \"Bearer ${NOTION_API_KEY}\", \"Notion-Version\": \"2022-06-28\"}"
+      }
+    },
+    "linear": {
+      "command": "npx",
+      "args": ["-y", "@tacticlaunch/mcp-linear"],
+      "env": {
+        "LINEAR_API_KEY": "${LINEAR_API_KEY}"
+      }
+    }
+  }
+}

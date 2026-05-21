@@ -1,0 +1,22 @@
+Metric: Daily Revenue
+Description: Total paid revenue and order count per day, sourced from raw_orders.
+Owner: pipeline-builder
+Tags: revenue, daily, sample
+
+Source: mart_daily_revenue
+
+Given the orders have status "paid"
+  And we are looking at one calendar day at a time
+
+When we calculate
+  Then sum the amount column for that day
+  And count the number of orders
+
+The result is "Daily Revenue"
+
+Trust:
+  Freshness must be less than 24 hours
+  Null rate on revenue must be less than 1%
+  Row count must not drop more than 50% day over day
+  Value must be between 0 and 100000
+  Duplicate rate on day must be 0%

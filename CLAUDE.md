@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Litmus** — canonical metric contracts for engineers, AI-answered questions for PMs, embeddable trust badges for everyone. Engineers define metrics as code (a Gherkin-inspired `.metric` DSL or YAML — both parse to the same `MetricSpec`). The CLI and the dbt package run automated data-quality checks against a warehouse. A hosted catalog stores revisions, renders SVG trust badges, powers Slack sign-off + `/ask`, and serves the three-audience UI.
+**Litmus** — AI-agent-driven data engineering for teams without a data team. A user installs the CLI (`pipx install litmus-data`), runs `litmus` in any repo, and gets a five-agent team in `.claude/` — `data-architect`, `pipeline-builder`, `analyst`, `code-reviewer`, `ops-pilot` — that they ask for data work: pipelines, transforms, dashboards, all written up in Notion/Linear. That is the one brand and the one direction; see `REFACTOR_VISION.md`.
 
-Package published on PyPI as **`litmus-data`**; the import name and CLI entry point are **`litmus`** (`litmus.cli:main`). Python **3.10+**. v0.3 ships alongside a dbt package (`dbt_packages/litmus/`), a Slack sign-off + `/ask` bot, and a redesigned UI — see `REFACTOR_BLUEPRINT.md` for the v0.3 scope.
+Underneath the team sits the **trust engine** — the quality layer that keeps the agents honest. Every mart table the team produces ships with a `.metric` contract (a Gherkin-inspired DSL or YAML — both parse to the same `MetricSpec`), and the CLI / dbt package run automated data-quality checks (freshness, nulls, volume, range, drift) against the warehouse. A hosted catalog stores revisions, renders SVG trust badges, and powers Slack sign-off + `/ask`. The trust engine also stands alone for teams that only want checks (`litmus init` → `litmus check`).
+
+**The CLI is the front door.** `litmus init` (or bare `litmus` in a TTY) incorporates the agent team + a metrics scaffold into any repo — both paths share `litmus/scaffold.py::install_agent_team`. Package published on PyPI as **`litmus-data`**; the import name and CLI entry point are **`litmus`** (`litmus.cli:main`). Python **3.10+**. Ships alongside a dbt package (`dbt_packages/litmus/`), a Slack sign-off + `/ask` bot, and the redesigned UI — see `REFACTOR_BLUEPRINT.md` for scope.
 
 ## Common commands
 

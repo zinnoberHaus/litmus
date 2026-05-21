@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "litmus-data"
-version = "0.3.0"
-description = "BDD-style metric definitions with built-in data trust checks"
+version = "0.4.0"
+description = "AI-agent-driven data engineering for teams without a data team, with a built-in trust engine"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
@@ -31,6 +31,9 @@ dependencies = [
     "pyyaml>=6.0",
     "duckdb>=1.0.0",
     "jinja2>=3.0",
+    # Streamlit powers `litmus dashboard`. Included by default because the
+    # bootstrap promises "open the dashboard" works out of the box.
+    "streamlit>=1.30",
 ]
 
 [project.optional-dependencies]
@@ -88,6 +91,22 @@ include = ["litmus*", "litmus_api*"]
 
 [tool.setuptools.package-data]
 "litmus.generators" = ["assets/*.png"]
+# Bundle templates so `pipx install litmus-data` users get a complete
+# project scaffold (agents, skills, mcp config, sample pipeline) at runtime.
+"litmus.templates" = [
+    "mcp.json",
+    "AGENTS.md",
+    "claude/agents/*.md",
+    "claude/skills/*/SKILL.md",
+    "sample_pipeline/README.md",
+    "sample_pipeline/data/*.csv",
+    "sample_pipeline/pipelines/*.yaml",
+    "sample_pipeline/transforms/*.sql",
+    "sample_pipeline/metrics/*.metric",
+    "sample_pipeline/dashboards/*.py",
+    "sample_pipeline/semantic/*.yaml",
+    "sample_pipeline/semantic/*.md",
+]
 
 [tool.ruff]
 target-version = "py310"

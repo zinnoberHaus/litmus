@@ -29,8 +29,20 @@ litmus-share/
 *.sqlite
 examples/warehouses/excel/budget.xlsx
 
-# Claude Code local config (workflow-only, not part of the package)
-.claude/
+# Claude Code: ship the agent team + skills (part of the product),
+# but keep local settings / scheduled tasks / worktrees private.
+.claude/*
+!.claude/agents/
+!.claude/skills/
+.claude/agents/__pycache__/
+
+# Local secrets — ship the example, not the real file.
+.env
+
+# DataPilot runtime state (per-project initialised data)
+.datapilot/
+data/warehouse.duckdb
+data/litmus_history.db
 
 # Source logo (derived sizes only; source stays local)
 docs/assets/logo-source.png

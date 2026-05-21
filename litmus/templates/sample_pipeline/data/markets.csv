@@ -1,0 +1,6 @@
+market_id,name,region,currency,tier,launched_at
+m_us,United States,Americas,USD,enterprise,2024-01-15
+m_eu,European Union,EMEA,EUR,enterprise,2024-03-01
+m_uk,United Kingdom,EMEA,GBP,enterprise,2024-04-10
+m_apac,Asia Pacific,APAC,USD,growth,2025-01-20
+m_latam,Latin America,Americas,USD,growth,2025-09-01

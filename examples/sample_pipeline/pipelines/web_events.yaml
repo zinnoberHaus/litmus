@@ -1,0 +1,16 @@
+source:
+  type: csv
+  path: ./data/raw/web_events.csv
+
+target:
+  table: raw_web_events
+  mode: replace
+
+schedule: hourly
+
+columns:
+  - { name: event_id,    type: VARCHAR }
+  - { name: customer_id, type: VARCHAR }
+  - { name: event_type,  type: VARCHAR }
+  - { name: page,        type: VARCHAR }
+  - { name: event_at,    type: TIMESTAMP }

@@ -61,7 +61,8 @@ def _request(cfg: PushConfig, method: str, path: str, payload: dict[str, Any]) -
     req = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            data: dict = json.loads(resp.read().decode("utf-8"))
+            return data
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise PushError(f"{method} {path} → {exc.code}: {detail}") from exc

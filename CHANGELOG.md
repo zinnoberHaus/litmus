@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-20
+
+The agent-team release — one brand, one direction. Litmus is now
+AI-agent-driven data engineering for teams without a data team: install the
+CLI, run `litmus` in any repo, and a five-agent team handles pipelines,
+transforms, dashboards, and quality checks. The trust engine from earlier
+releases becomes the quality layer underneath the team.
+
+### Added
+
+- **Agent team incorporated via the CLI.** `litmus init` (and bare `litmus`
+  in a TTY) now lay down the full agent team into any repo — `.claude/agents/`,
+  `.claude/skills/`, `.mcp.json`, `AGENTS.md` — plus a metrics scaffold, and
+  write `.litmus/state.json`. Both entry points share one implementation,
+  `litmus.scaffold.install_agent_team`. Idempotent; never clobbers existing files.
+- **Interactive TUI** (`litmus/tui.py`) — bare `litmus` bootstraps the project
+  and drops into an agent console.
+- **Thin orchestration layer** — `litmus/pipelines/` (YAML ingest + SQL
+  transform runner), `litmus/dashboards/` (Streamlit helpers),
+  `litmus/integrations/` (Notion / Linear / trust adapters),
+  `litmus/diagnostics.py` (`litmus doctor`).
+- **Bundled sample pipeline + templates** ship inside the wheel so
+  `pipx install litmus-data` users get the team and a sample without cloning.
+
+### Changed
+
+- Repositioned the brand end-to-end (README, CLAUDE.md, `litmus-init` skill,
+  package metadata) from "metric trust-check tool" to the agent-driven
+  platform with the trust engine as its quality layer. See `REFACTOR_VISION.md`.
+
 ## [0.3.0] - 2026-04-18
 
 The three-audience release. Litmus now serves engineers (canonical metric
