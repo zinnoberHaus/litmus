@@ -4,24 +4,17 @@ on:
   push:
     branches: [main]
     paths:
-      - "examples/**"
       - "litmus/**"
       - ".github/workflows/examples.yml"
   pull_request:
     paths:
-      - "examples/**"
       - "litmus/**"
       - ".github/workflows/examples.yml"
 
 jobs:
-  warehouses:
-    name: "warehouse: ${{ matrix.example }}"
+  smoke:
+    name: "init → run → test"
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example: [csv, duckdb, sqlite, excel]
-
     steps:
       - uses: actions/checkout@v4
 
@@ -35,82 +28,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Install example-specific tooling
+      - name: Set up a project from the bundled sample
         run: |
-          sudo apt-get update
-          sudo apt-get install -y sqlite3
-          # openpyxl only needed for the Excel example
-          if [[ "${{ matrix.example }}" == "excel" ]]; then
-            pip install openpyxl
-          fi
+          mkdir -p /tmp/demo
+          cd /tmp/demo
+          litmus init . --yes --source sample
 
-      - name: Seed example data
-        working-directory: examples/warehouses/${{ matrix.example }}
-        run: ./setup.sh
+      - name: Run the pipeline + data tests
+        working-directory: /tmp/demo
+        run: |
+          litmus run
+          litmus test
 
-      - name: Run litmus check
-        working-directory: examples/warehouses/${{ matrix.example }}
+      - name: Assert the house was built
+        working-directory: /tmp/demo
         run: |
-          # Each example's setup.sh prints the litmus command to run.
-          # They all follow the pattern: litmus check <name>.metric
-          metric=$(ls *.metric | head -1)
-          litmus check "$metric" --format json --output report.json
-
-      - name: Upload report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: example-report-${{ matrix.example }}
-          path: examples/warehouses/${{ matrix.example }}/report.json
-          if-no-files-found: warn
-
-  alignment:
-    name: "alignment demo (3 teams, 3 numbers)"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -e .
-      - name: Seed alignment data
-        working-directory: examples/alignment
-        # Seed via the Python duckdb module so the file is written by the same
-        # version litmus will read. Mixing CLI and Python duckdb versions trips
-        # storage-format skew (CLI < Python breaks with "table does not exist").
-        run: |
-          python - <<'PY'
-          import duckdb
-          sql = open("seed.sql").read()
-          duckdb.connect("alignment_demo.duckdb").execute(sql)
-          PY
-      - name: Verify seed landed
-        working-directory: examples/alignment
-        run: |
-          python - <<'PY'
-          import duckdb
-          row = duckdb.connect("alignment_demo.duckdb").execute(
-              "SELECT COUNT(*) AS orders, "
-              "SUM(CASE WHEN amount IS NULL THEN 1 ELSE 0 END) AS null_amount "
-              "FROM orders"
-          ).fetchone()
-          print(f"orders={row[0]}, null_amount={row[1]}")
-          PY
-      - name: Run litmus check (expect intentional red)
-        working-directory: examples/alignment
-        run: |
-          # The alignment demo's monthly_revenue.metric includes an intentional null-rate
-          # failure on O-005 (missing USD conversion). We expect exit code 1.
-          litmus check metrics/monthly_revenue.metric --format json --output report.json || true
-          test -s report.json
-          # Dump the full report so we can diagnose when the assertion below fails.
-          cat report.json
-          # Confirm the specific failing rule is present.
-          python - <<'PY'
-          import json, sys
-          data = json.load(open("report.json"))
-          fails = [c for m in data["metrics"] for c in m["checks"] if c["status"] == "failed"]
-          names = [c["name"] for c in fails]
-          print("Failing rules:", names)
-          assert any("amount" in n for n in names), f"Expected amount null-rate failure; got {names}"
-          PY
+          test -f litmus.yaml
+          test -d sources && test -d transforms && test -d tests
+          test -f .claude/agents/data-architect.md
+          test -f data/warehouse.duckdb

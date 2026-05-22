@@ -1,0 +1,27 @@
+# Example: run `litmus test` on every pull request.
+# Copy this file into your own repo under .github/workflows/, adjust the
+# paths to match your project, and you're done — failing data tests block the PR.
+
+name: Litmus test
+
+on:
+  pull_request:
+    paths:
+      - "tests/**/*.sql"
+      - "transforms/**/*.sql"
+      - "sources/**"
+
+permissions:
+  contents: read
+
+jobs:
+  litmus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Litmus data tests
+        uses: litmus-data/litmus@v0          # or `./` when testing locally
+        with:
+          working-directory: "."
+          # litmus-version: "0.5.0"          # pin for reproducible CI
