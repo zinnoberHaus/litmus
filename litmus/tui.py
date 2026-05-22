@@ -758,12 +758,19 @@ def _ask_agent(prompt: str, status: dict) -> None:
     console.print()
     console.print("[dim]Working...[/dim]\n")
 
+    from litmus.runtime import claude_model_args, runtime_note
+
+    note = runtime_note()
+    if note:
+        console.print(f"[dim]{note}[/dim]")
+
     cmd = [
         "claude",
         "--print",
         prompt,
         "--append-system-prompt", DATA_ENGINEERING_SCOPE,
     ]
+    cmd += claude_model_args()
     if skip_perms:
         cmd.append("--allow-dangerously-skip-permissions")
 
@@ -883,27 +890,39 @@ def _load_semantic_layer() -> dict:
 
 
 def _action_health() -> None:
-    """Trust checks + pipeline last-run summary."""
+    """Data tests + pipeline last-run summary."""
     state = _load_state()
     warehouse_url = state.get(
         "warehouse_url", "duckdb:///./data/warehouse.duckdb"
     )
 
-    metrics_dir = Path("metrics")
+    tests_dir = Path("tests")
     pipelines_dir = Path("pipelines")
 
     console.print()
-    console.print("[bold]Trust checks[/bold]")
-    if not metrics_dir.exists() or not any(metrics_dir.glob("*.metric")):
-        console.print("  [dim]No metrics/ contracts yet.[/dim]")
+    console.print("[bold]Data tests[/bold]")
+    test_files = sorted(tests_dir.glob("*.sql")) if tests_dir.exists() else []
+    if not test_files:
+        console.print("  [dim]No tests/ yet — ask the team or run `litmus test`.[/dim]")
+    elif not warehouse_url.startswith("duckdb://"):
+        console.print(
+            f"  [dim]{len(test_files)} test(s); non-DuckDB warehouse — run "
+            "`litmus test`.[/dim]"
+        )
     else:
-        try:
-            from litmus.integrations.trust import check_all_metrics
-            results = check_all_metrics(warehouse_url)
-            if not results:
-                console.print("  [dim]No mart tables matched any .metric file.[/dim]")
-        except Exception as e:
-            console.print(f"  [red]check failed: {e}[/red]")
+        import duckdb
+        db_path = warehouse_url.replace("duckdb:///", "").replace("duckdb://", "")
+        for tf in test_files:
+            try:
+                con = duckdb.connect(db_path, read_only=True)
+                rows = con.execute(tf.read_text()).fetchall()
+                con.close()
+                if rows:
+                    console.print(f"  [red]✗[/red] {tf.stem} ({len(rows)} problem row(s))")
+                else:
+                    console.print(f"  [green]✓[/green] {tf.stem}")
+            except Exception as e:
+                console.print(f"  [red]✗[/red] {tf.stem}: {e}")
 
     console.print()
     console.print("[bold]Pipelines[/bold]")
@@ -992,7 +1011,7 @@ def _action_chart(question: str) -> None:
         "- Read only from mart_* tables (or join via raw_* if no mart exists).\n"
         "- Save as dashboards/chart_<slug>.py with a descriptive filename.\n"
         "- Use the semantic/ definitions to resolve metric names.\n"
-        "- Include freshness_header and trust_banner from litmus.dashboards.\n"
+        "- Include freshness_header from litmus.dashboards.\n"
         "- After writing the file, print the path so I can open it.\n"
     )
     _ask_agent(prompt, status)

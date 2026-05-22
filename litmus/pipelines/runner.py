@@ -16,7 +16,6 @@ import yaml
 
 PIPELINES_DIR = Path("pipelines")
 TRANSFORMS_DIR = Path("transforms")
-METRICS_DIR = Path("metrics")
 STATE_FILE = Path(".litmus/state.json")
 
 
@@ -149,17 +148,10 @@ def run_transform(name: str, warehouse_url: str | None = None) -> int:
 
 
 def run_all(warehouse_url: str | None = None) -> None:
-    """Run every pipeline + every transform + every Litmus check."""
+    """Run every pipeline + every transform."""
     warehouse_url = warehouse_url or _default_warehouse()
 
     for p in list_pipelines():
         run_ingest(p.stem, warehouse_url)
     for t in list_transforms():
         run_transform(t.stem, warehouse_url)
-
-    if METRICS_DIR.exists() and any(METRICS_DIR.glob("*.metric")):
-        try:
-            from litmus.integrations.trust import check_all_metrics
-            check_all_metrics(warehouse_url)
-        except ImportError:
-            print("[trust] trust-check integration not available; skipping checks")

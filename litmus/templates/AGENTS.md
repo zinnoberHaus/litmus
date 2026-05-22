@@ -5,7 +5,7 @@ Litmus ships with a five-agent team in `.claude/agents/`. They are the people on
 | Agent | What they do | When to invoke |
 |-------|--------------|----------------|
 | **[data-architect](.claude/agents/data-architect.md)** | Designs schemas, picks the warehouse, plans the pipeline | "how should I model X", "what schema do I need for Y" |
-| **[pipeline-builder](.claude/agents/pipeline-builder.md)** | Writes ingest + transform code, attaches Litmus trust contracts | "ingest Stripe", "build a daily revenue rollup" |
+| **[pipeline-builder](.claude/agents/pipeline-builder.md)** | Writes ingest + transform code, adds data tests | "ingest Stripe", "build a daily revenue rollup" |
 | **[analyst](.claude/agents/analyst.md)** | Builds Streamlit dashboards, answers ad-hoc questions | "what's our MoM growth?", "build a founder dashboard" |
 | **[code-reviewer](.claude/agents/code-reviewer.md)** | Gates merges on the non-negotiables (trust contracts, idempotency, secrets) | Always, before merge |
 | **[ops-pilot](.claude/agents/ops-pilot.md)** | Syncs project state to Notion, opens/closes Linear issues | After any concrete deliverable |
@@ -18,7 +18,7 @@ You: "I need a daily revenue dashboard for the founder"
   ▼
 data-architect ──── designs schema + picks tables ────▶ pipeline-builder
                                                           │
-                                                          │ writes transform + .metric
+                                                          │ writes transform + tests
                                                           ▼
 analyst ◀──── new mart_daily_revenue table is ready
    │
@@ -68,22 +68,11 @@ The `.claude/skills/` directory ships six slash commands that wrap common multi-
 - **`/litmus-sync-notion`** — push current state to Notion
 - **`/litmus-sync-linear`** — sync the issue queue to Linear
 
-## Internal sub-team (trust engine)
-
-If you're modifying the trust engine (parser, checks, connectors) rather than using it as a black box, four additional agents live in `.claude/agents/_internal/`:
-
-- `litmus-architect` — owns the `.metric` DSL
-- `litmus-inspector` — owns the trust-check runtime
-- `litmus-connector` — owns the warehouse adapters
-- `litmus-advocate` — owns the CLI, reporters, dbt importer
-
-Most users never invoke these directly.
-
 ## Invariants
 
 Across the whole team:
 
-1. **Every mart table has a `.metric` contract.** No exceptions; `code-reviewer` blocks merges without one.
+1. **Every mart table has a data test.** A plain SQL file in `tests/` that must return zero rows; `code-reviewer` flags a mart table that ships without one.
 2. **Every transform is idempotent.** Re-running today produces the same result.
 3. **Dashboards read only from `mart_*` tables.** Raw-table queries in Streamlit are a blocker.
 4. **Secrets only via env vars.** Never hardcoded in YAML, SQL, or Python.

@@ -1,6 +1,6 @@
 ---
 name: litmus-dashboard
-description: Scaffold a new Streamlit dashboard for a specific stakeholder. Wires it to existing mart tables and pins the Litmus trust badges to the header. Use after litmus-transform has produced a mart table the dashboard will read from.
+description: Scaffold a new Streamlit dashboard for a specific stakeholder. Wires it to existing mart tables and surfaces the data-test status in the header. Use after litmus-transform has produced a mart table the dashboard will read from.
 ---
 
 # /litmus-dashboard
@@ -25,12 +25,12 @@ Build a Streamlit dashboard.
 
    import streamlit as st
    import duckdb
-   from litmus.dashboards import freshness_header, trust_banner
+   from litmus.dashboards import freshness_header, data_test_banner
 
    st.set_page_config(page_title="<Name>", layout="wide")
    st.title("<Name>")
    freshness_header(["mart_daily_revenue", "mart_customer_ltv"])
-   trust_banner(["mart_daily_revenue", "mart_customer_ltv"])
+   data_test_banner(["mart_daily_revenue", "mart_customer_ltv"])
 
    @st.cache_data(ttl=900)
    def load_revenue():
@@ -41,7 +41,7 @@ Build a Streamlit dashboard.
    st.line_chart(df.set_index("day")["revenue"])
    ```
 4. **Run it** — `streamlit run dashboards/<name>.py`. Confirm it loads.
-5. **Hand off to `code-reviewer`.** They gate on: `mart_*` only, `@st.cache_data` present, freshness header present, trust banner present, file named for the audience.
+5. **Hand off to `code-reviewer`.** They gate on: `mart_*` only, `@st.cache_data` present, freshness header present, data-test status surfaced, file named for the audience.
 6. **Tell `ops-pilot`** — "new dashboard at `dashboards/<name>.py`, served at <url>. Add it to the Notion project page."
 
 ## Conventions
@@ -49,7 +49,7 @@ Build a Streamlit dashboard.
 - File is named for the audience (`founder_weekly.py`, `sales_pipeline.py`), not generic (`dashboard.py`, `main.py`).
 - Reads only from `mart_*` tables. Raw-table reads are a `code-reviewer` blocker.
 - Every query function has `@st.cache_data(ttl=900)`. The warehouse is not a transactional DB; re-running aggregations on every page reload is a perf-disaster.
-- Header always shows freshness ("data through <timestamp>") and any Litmus FAILED status as a banner.
+- Header always shows freshness ("data through <timestamp>") and any failing data test as a banner.
 - One question per chart. If you need three, make three charts. Don't pack four lines on one axis.
 - Default to text + tables. Charts are for trends over time; everything else is better as a number or a table.
 

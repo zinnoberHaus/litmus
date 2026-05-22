@@ -1,116 +1,141 @@
-# Litmus — refactor vision (May 2026)
+# Litmus — refactor vision (v0.5, May 2026)
 
 ## What we're becoming
 
-This repo is being repositioned from **Litmus** (a metric trust-check tool) into **Litmus** (the same name, broader product): an open-source, **AI-agent-driven data engineering platform** for teams that don't have, and don't want to spin up, a full data team.
+**Litmus is your AI data agents team.** Install it with pip, run `litmus init`
+in any repo, walk through a short wizard, and you get a working data team — a
+set of AI agents plus the scaffolding (ingestion, transformation,
+visualization, testing) tailored to *your* data sources.
 
-**The user we're building for:**
-- 2–30 person companies that suddenly have data questions ("what's our CAC trend?", "build me a dashboard for the founder", "set up an ETL from Stripe into our warehouse").
-- They have engineering talent, maybe, but no dedicated data engineer / analytics engineer / BI hire.
-- They don't want to evaluate Fivetran + dbt + Snowflake + Looker + Monte Carlo. They want a single tool they can install, point at their data, and have an AI team handle the rest.
+This supersedes the v0.4 vision. The biggest change: **the trust engine is
+removed.** The `.metric` DSL, parser, checks runner, reporters, the hosted
+catalog (`litmus_api/`), the dbt package, and SVG trust badges are all cut.
+They were too tedious for the audience we now serve — people who just want to
+*verify a source, transform it with business logic, and operate on the result*,
+not author a formal data-contract language.
+
+## Who we're for (broadened)
+
+1. **Companies with no data team** — engineers exist, a dedicated data
+   engineer / analytics engineer does not. (Unchanged from v0.4.)
+2. **Product & business teams that don't want centralized data** — they don't
+   need a warehouse-of-record or a BI org. They have a source (a Postgres
+   replica, a Stripe account, a CSV export, a Sheet), some business logic, and
+   a question. Litmus stands up just enough — verify the source, transform it,
+   visualize/operate on it — without the heavyweight stack.
 
 **The promise:**
-> "`pipx install litmus-data`. Run `litmus` in any directory. Describe what data work you need. The agents do it — pipelines, transforms, quality checks, dashboards — and write everything up in your Notion."
+> `pip install litmus-data`. Run `litmus init`. Pick your model, point at your
+> data. Litmus generates your data team and the project around it. Then talk to
+> the team (`litmus`) or drive it with commands (`litmus run`, `litmus test`,
+> `litmus dashboard`).
 
-## What's not changing
+## The setup flow (`litmus init`)
 
-The **trust engine stays** — DSL, parser, checks, connectors, FastAPI catalog, dbt package, badges, Slack sign-off, AI run explanations, BI reconciliation. All of that is now part of the same product: it's how Litmus guarantees the data its agents produce is trustworthy.
+A guided wizard, in this order:
 
-The four internal agents that own the trust engine (`litmus-architect`, `litmus-inspector`, `litmus-connector`, `litmus-advocate`) stay as the **sub-team** in `.claude/agents/_internal/`. They're for contributors modifying the trust engine; end users never see them.
+1. **Project name** — defaults to the current directory name.
+2. **Pick an AI model** — a menu of well-known models (Claude Opus 4.7, Claude
+   Sonnet 4.6, GPT-5, Gemini 2.5 Pro, or a local model). The choice sets the
+   `provider`, the model `name`, and the `runtime` (how we actually call it —
+   see "Agent runtime" below).
+3. **Choose data inflow (multi-select)** — one or more of: sample dataset,
+   DuckDB (local), Postgres, Snowflake, BigQuery, CSV files, REST API, Stripe,
+   Google Sheets. Multiple selections are allowed and expected.
+4. **Build the "Litmus house"** — a progress-bar phase that generates the
+   project: folders + per-source config + agents + skills + a transformation,
+   visualization, and testing framework. **Generated generically from the
+   user's choices** — e.g. selecting Postgres + Stripe produces source configs,
+   agent context, and skills that already know about those two sources.
+5. **Done** — print the two ways to use the team.
 
-## What's new
-
-### 1. Install + go
-
-```bash
-pipx install litmus-data
-cd ~/my-project
-litmus
-```
-
-Bare `litmus` drops into an interactive TUI (see `litmus/tui.py`). It detects whether the project is initialised, offers to bootstrap (warehouse, sample data, Notion playbook, Linear project), then shows a menu of next actions including "open in Claude Code" for agent-driven work.
-
-### 2. A user-facing agent team (`.claude/agents/`)
-
-Five agents the **end user** invokes when they want data work done:
-
-| Agent | Role | Primary verbs |
-|-------|------|---------------|
-| **data-architect** | Designs the schema, picks the warehouse, plans the pipeline | "model this", "what schema do I need for…" |
-| **pipeline-builder** | Writes the ingest + transform code | "pull Stripe into orders table", "build a daily revenue rollup" |
-| **analyst** | Builds dashboards, writes SQL, answers ad-hoc questions | "what's our MoM growth?", "build a founder dashboard" |
-| **code-reviewer** | Reviews any PR before merge; gates trust violations | Always invoked before merge |
-| **ops-pilot** | Wires Notion + Linear, runs the daily review | "open Linear issue for X", "sync to Notion" |
-
-### 3. A skill system (`.claude/skills/`)
-
-Slash commands for the workflow:
-
-- `/litmus-init` — bootstrap a fresh project (warehouse, sample data, Notion page, Linear project)
-- `/litmus-ingest` — register a new data source (CSV, Postgres, REST API, Stripe, Google Sheets)
-- `/litmus-transform` — scaffold a new SQL transform with a trust contract attached
-- `/litmus-dashboard` — scaffold a new Streamlit dashboard
-- `/litmus-sync-notion` — push current state to Notion
-- `/litmus-sync-linear` — sync the issue queue to Linear
-
-### 4. Notion + Linear MCP wiring
-
-`.mcp.json` at the repo root declares the Notion and Linear MCP servers so cloning the repo (or, when shipped, running `litmus init` in a directory) gives every contributor the integration out of the box. `.env.example` documents the required tokens.
-
-- **Notion** = the **docs + operations** surface. Every project gets a Notion page with: project goal, data sources, pipelines, dashboards, current trust score, open issues.
-- **Linear** = the **engineering** surface. Bugs, feature requests, and agent-detected issues land here as tickets.
-
-### 5. Orchestration layer (folded into `litmus/`)
-
-The thin orchestration on top of the trust engine — `litmus/pipelines/`, `litmus/dashboards/`, `litmus/integrations/`, `litmus/diagnostics.py`, `litmus/tui.py` — all live inside the same `litmus` package as the trust engine. One package, one `litmus` CLI, one PyPI release.
-
-- `litmus/pipelines/runner.py` — YAML-driven ingest + SQL transform runner (~200 lines).
-- `litmus/dashboards/__init__.py` — Streamlit helpers (freshness header, trust banner).
-- `litmus/integrations/trust.py` — adapter that runs trust checks on mart tables.
-- `litmus/integrations/notion.py` — `ProjectSnapshot` payload shape for the Notion MCP.
-- `litmus/integrations/linear.py` — `IssueDraft` payload shape for the Linear MCP.
-- `litmus/tui.py` — interactive bootstrap + menu (bare `litmus` invocation).
-- `litmus/templates/sample_pipeline/` — the bundled sample (ships in the wheel).
-
-### 6. Sample dataset bundled in the wheel
-
-`litmus/templates/sample_pipeline/` ships inside the installed package:
+## Generated project ("the Litmus house")
 
 ```
-litmus/templates/sample_pipeline/
-  data/
-    customers.csv (30 rows)
-    orders.csv (70 rows)
-    web_events.csv (40 rows)
-  pipelines/    *.yaml (3 ingest specs)
-  transforms/   *.sql (2 mart tables)
-  metrics/      *.metric (2 trust contracts)
-  dashboards/   founder_weekly.py
+my-project/
+├── litmus.yaml              # project config: name, model, sources
+├── sources/<id>.yaml        # one data-inflow config per selected source
+├── transforms/              # business-logic transforms (SQL / Python)
+├── dashboards/              # visualization (Streamlit)
+├── tests/                   # lightweight data tests (NOT a contract DSL)
+├── .claude/
+│   ├── agents/              # the team, tailored to the chosen sources
+│   └── skills/              # workflow skills (ingest, transform, viz, test)
+├── .mcp.json                # optional Notion / Linear wiring
+├── AGENTS.md                # how to talk to the team
+└── .litmus/state.json       # project state
 ```
 
-`examples/sample_pipeline/` mirrors this for repo-clone dev usage; both stay in sync (the canonical source is the package copy).
+The agents and skills are written from templates that are **parameterized by
+the user's source selection**, so a fresh project isn't generic boilerplate —
+it references the actual sources the user picked.
 
-### 7. The Notion playbook
+## Two ways to use the team (after setup)
 
-`PLAYBOOK.md` is the content that gets synced into Notion when a project is initialised. It's the **non-technical operator's guide**: "your Litmus is set up — here's how to ask it for things, here's where to find what it produced, here's how to read the trust badges."
+1. **Interactive — `litmus`** (run with no subcommand inside the repo). Drops
+   into a chat REPL where you talk to the team in natural language.
+2. **Commands — dbt-style, but every command is fronted by the agents:**
+   - `litmus init` — the setup wizard.
+   - `litmus configure` — re-run/edit model + sources.
+   - `litmus run` — ingest → transform (the pipeline).
+   - `litmus test` — run the data tests (agent-assisted).
+   - `litmus dashboard` — build/open the Streamlit visualizations.
+   - `litmus agent "<task>"` — dispatch a one-off task to the team.
 
-## What we are explicitly NOT building
+## Agent runtime — Python or TypeScript? (answering the open question)
 
-- A new orchestration framework. Thin YAML-over-Python runner. Outgrow it → graduate to Dagster / Airflow / Prefect.
-- A new warehouse. DuckDB is the default; Postgres / Snowflake / BigQuery are supported via the existing connectors.
-- A hosted SaaS. The catalog (`litmus_api/`) is still optional, opt-in. Local-only flow works end-to-end.
-- A new BI tool. We scaffold Streamlit. Bring your own Tableau / Looker / Metabase / Evidence.
+**Python is sufficient. No TypeScript is required.** Three options, in order of
+how we'll adopt them:
+
+1. **Shell out to the Claude Code CLI** (`claude --print …`) — what the current
+   TUI does. Zero SDK code; inherits the user's Claude Code auth, `.claude/agents`,
+   and skills. This is the default and the fallback.
+2. **Claude Agent SDK for Python** (`pip install claude-agent-sdk`) — a real
+   in-process agent loop (streaming, tool use, subagents, MCP, skills) without
+   depending on the `claude` binary. This is the "proper" embedded REPL and what
+   we move the interactive `litmus` mode toward. Claude-only.
+3. **Provider adapters** — for non-Claude models (GPT, Gemini, local), a thin
+   `AgentRuntime` interface so the model menu in `init` is honest. v1 ships the
+   Claude paths fully and stubs the others behind the same interface.
+
+TypeScript's Agent SDK exists and has parity, but it would split the codebase
+for no benefit — the CLI, the scaffolder, and the runtime are all Python.
+
+## What's removed (the trust engine)
+
+Deleted: `litmus/parser/`, `litmus/spec/`, `litmus/checks/`, `litmus/reporters/`,
+`litmus/generators/`, `litmus/connectors/` (trust I/O), `litmus/config/`
+(trust-only), `litmus/api_push.py`, `litmus/integrations/trust.py`, `litmus_api/`,
+`dbt_packages/`, `schemas/`, and their tests. CLI subcommands `check`, `parse`,
+`explain`, `explain-run`, `import-dbt`, `export`, `report`, `share`, `reconcile`
+go with them. The `[server] [ai] [bi] [postgres] [snowflake] [bigquery]` extras
+are pruned to what ingestion actually needs.
+
+`tests/` is reduced to the agent layer: CLI, wizard, scaffolder, pipelines,
+integrations.
+
+## What stays / expands
+
+`litmus/tui.py` (interactive REPL), `litmus/wizard.py` (new — the init flow +
+scaffolder), `litmus/scaffold.py` (agent-team installer), `litmus/pipelines/`
+(ingest + transform runner), `litmus/dashboards/` (Streamlit helpers),
+`litmus/integrations/` (Notion / Linear), `litmus/diagnostics.py` (`litmus doctor`),
+and `litmus/templates/` (now generic, source-parameterized).
 
 ## Phased delivery
 
-**Phase 1 (this refactor)** — the scaffolding and the demo. Five agents, six skills, Notion/Linear MCP wiring, orchestration layer inside `litmus/`, bundled sample pipeline, interactive TUI, pipx-friendly install, docs.
+- **Phase 1** — the new `litmus init` wizard + generic scaffolder (model menu,
+  multi-select sources, progress bars, source-parameterized house).
+- **Phase 2** — CLI surface: `litmus`, `configure`, `run`, `test`, `dashboard`,
+  `agent`; interactive REPL polish.
+- **Phase 3** — remove the trust engine + prune tests, extras, packaging.
+- **Phase 4** — rebrand everything (README, CLAUDE.md, AGENTS.md, agents/skills
+  templates) to "Your AI data agents team."
+- **Phase 5** — provider adapters beyond Claude; richer source connectors
+  (Postgres/Stripe/Sheets ingestion).
 
-**Phase 2** — real integrations. Notion sync that actually creates and updates pages. Linear sync that opens and resolves issues. Stripe / Postgres / Google Sheets ingest connectors. A `litmus doctor` that goes deeper than env-var checks.
+## Naming / compatibility
 
-**Phase 3** — production polish. Schedule pipelines via cron, push trust failures to Slack, deploy dashboards to Streamlit Cloud / Vercel, multi-environment support (dev / prod warehouses), brew formula for one-line install.
-
-## Backwards compatibility
-
-All existing trust-engine CLI commands continue to work unchanged — `litmus init`, `litmus check`, `litmus parse`, `litmus explain`, `litmus import-dbt`, `litmus export`, `litmus report`, `litmus share`, `litmus reconcile`. New subcommands (`litmus demo`, `litmus ingest`, `litmus transform`, `litmus dashboard`, `litmus run`, `litmus doctor`) are additive. Bare `litmus` is new (interactive TUI) — previously `litmus` with no args printed help; now it does that under non-TTY use, and launches the TUI when run in a terminal.
-
-PyPI package name `litmus-data` is unchanged. PyPI users on the old install will see the new TUI on next upgrade with no flag changes.
+PyPI package stays `litmus-data`; CLI stays `litmus`. This is a breaking 0.5
+release — the trust-engine CLI verbs are gone. Done on the
+`refactor/ai-data-agents` branch; not merged to `main` until reviewed.

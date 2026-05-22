@@ -1,6 +1,6 @@
 ---
 name: litmus-transform
-description: Scaffold a new SQL transform that produces a mart table, with a Litmus trust contract attached. Use after litmus-ingest has loaded raw data. Output goes to transforms/<table>.sql + metrics/<table>.metric.
+description: Scaffold a new SQL transform that produces a mart table, with data tests attached. Use after litmus-ingest has loaded raw data. Output goes to transforms/<table>.sql + tests/<table>_*.sql.
 ---
 
 # /litmus-transform
@@ -36,41 +36,40 @@ Build a new transform from raw → mart.
    ```
    Requirements: idempotent (`CREATE OR REPLACE` or `INSERT OR REPLACE`), `updated_at` column, no `SELECT *`.
 
-4. **Write the Litmus `.metric` contract** to `metrics/<mart-table-name>.metric`:
+4. **Write data tests** to `tests/<mart-table-name>_*.sql`. A data test is a plain SQL query that **must return zero rows to pass** — any row it returns is a failing record. Write one file per check:
+   ```sql
+   -- tests/mart_daily_revenue_freshness.sql
+   -- fails if the table hasn't been refreshed in the last 24 hours
+   SELECT 1 WHERE (
+       SELECT MAX(updated_at) FROM mart_daily_revenue
+   ) < CURRENT_TIMESTAMP - INTERVAL '24 hours';
    ```
-   metric: <Mart Daily Revenue>
-     description: Daily revenue + order count for the last 90 days
-     owner: pipeline-builder
-
-   source:
-     table: mart_daily_revenue
-
-   given:
-     refreshed daily from raw_orders
-
-   when:
-     summed by day
-
-   then:
-     present as a revenue trend
-
-   Trust:
-     Freshness must be less than 24 hours
-     Null rate on day must be less than 1%
-     Row count must not drop more than 30% day over day
-     Value must be between 0 and 10000000   # TODO: tighten after 1 week
-     Duplicate rate on day must be 0%
+   ```sql
+   -- tests/mart_daily_revenue_no_null_day.sql
+   -- fails for every row with a null primary key
+   SELECT day FROM mart_daily_revenue WHERE day IS NULL;
+   ```
+   ```sql
+   -- tests/mart_daily_revenue_value_range.sql
+   -- fails for every row whose revenue is out of band
+   SELECT day, revenue FROM mart_daily_revenue
+   WHERE revenue < 0 OR revenue > 10000000;  -- TODO: tighten after 1 week
+   ```
+   ```sql
+   -- tests/mart_daily_revenue_unique_day.sql
+   -- fails for every duplicated primary key
+   SELECT day FROM mart_daily_revenue GROUP BY day HAVING COUNT(*) > 1;
    ```
 
 5. **Run the transform** — `litmus transform <name>`. Confirm row count + a sample row.
-6. **Run `litmus check metrics/<name>.metric`** — confirm trust contract passes.
-7. **Hand off to `code-reviewer`.** They gate on: idempotent, `.metric` exists, `updated_at` present, no `SELECT *`.
+6. **Run `litmus test`** — confirm every test for the new table returns zero rows.
+7. **Hand off to `code-reviewer`.** They gate on: idempotent, data tests exist, `updated_at` present, no `SELECT *`.
 8. **Tell `analyst`** that `mart_<name>` is available, in case they want to build a dashboard.
 
 ## Conventions
 
 - Mart tables always named `mart_<noun>` (`mart_daily_revenue`, `mart_customer_ltv`).
-- Always include `updated_at` (Litmus freshness needs it).
+- Always include `updated_at` (freshness tests need it).
 - Always idempotent.
 - Window: don't compute over all-time if you can avoid it. Most marts only need the last 90 days.
 - Comments at the top: what is this table, where does it come from, how often is it refreshed.
@@ -78,5 +77,5 @@ Build a new transform from raw → mart.
 ## Failure modes
 
 - **Source raw table missing** — escalate to `/litmus-ingest` first.
-- **Trust contract fails on first run** — investigate before merging. Don't loosen the thresholds to make it pass.
+- **A data test fails on first run** — investigate before merging. Don't loosen the thresholds to make it pass.
 - **Transform takes > 5 minutes** — escalate to `data-architect`; you're probably joining wrong or missing an index / partition.

@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-21
+
+**Litmus is now "your AI data agents team."** Breaking release — the trust
+engine is removed and the product is reframed around an agent-driven data
+project you set up with a guided wizard. See `REFACTOR_VISION.md`.
+
+### Added
+
+- **Guided `litmus init` wizard** (`litmus/wizard.py`): project name → pick an
+  AI model (Claude Opus/Sonnet/Haiku, GPT-5, Gemini, local) → multi-select data
+  inflow (sample, DuckDB, Postgres, Snowflake, BigQuery, CSV, REST, Stripe,
+  Sheets) → progress-bar "build the Litmus house." Generates a project
+  parameterized by the chosen sources: `litmus.yaml`, `sources/<id>.yaml`,
+  `transforms/`, `dashboards/`, `tests/`, the agent team, `.env.example`, and
+  `.litmus/context.md` (a brief the agents read).
+- **dbt-style CLI, fronted by the agents**: `litmus configure`, `litmus test`
+  (runs `tests/*.sql`; a test passes when it returns zero rows), `litmus agent
+  "<task>"`, alongside `run / dashboard / add / ingest / transform / ask /
+  connect / doctor`. Bare `litmus` opens the interactive agent console.
+- **Model-aware runtime** (`litmus/runtime.py`): the model picked in `init` is
+  passed through to the Claude Code CLI; non-Claude providers route through it
+  for now with a one-line notice (native adapters on the roadmap).
+
+### Removed
+
+- The entire **trust engine**: the `.metric` DSL, parser, spec, checks runner,
+  reporters, generators, warehouse connectors, the hosted catalog (`litmus_api/`),
+  the dbt package, JSON schemas, and the CLI verbs `check / parse / explain /
+  explain-run / import-dbt / export / report / share / reconcile`. Data quality
+  is now plain SQL tests under `tests/`.
+- Trust-only packaging extras (`postgres / snowflake / bigquery / server / ai /
+  bi / all`); the install is slim again.
+
 ## [0.4.0] - 2026-05-20
 
 The agent-team release — one brand, one direction. Litmus is now

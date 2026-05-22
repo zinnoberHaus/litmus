@@ -1,14 +1,15 @@
-"""Streamlit dashboard helpers — freshness headers + trust banners.
+"""Streamlit dashboard helpers — a freshness header.
 
-Imported by every dashboard scaffold so the freshness + trust pattern is
-consistent across the project. Streamlit is an optional dependency; functions
-no-op gracefully if streamlit isn't installed.
+Imported by dashboard scaffolds so the freshness pattern is consistent across
+the project. Streamlit is an optional dependency; functions no-op gracefully if
+streamlit isn't installed.
 """
 
 from __future__ import annotations
 
 import os
 from collections.abc import Iterable
+from pathlib import Path
 
 
 def _streamlit():
@@ -45,22 +46,32 @@ def freshness_header(tables: Iterable[str]) -> None:
         st.caption(f"Data freshness unavailable ({type(e).__name__})")
 
 
-def trust_banner(tables: Iterable[str]) -> None:
-    """Render a banner if any Litmus check has FAILED for the given tables."""
+def data_test_banner(tests_dir: str = "tests") -> None:
+    """Render a warning if any ``tests/*.sql`` returns rows (a failing data test).
+
+    Mirrors `litmus test`: a test passes when its query returns zero rows.
+    """
     st = _streamlit()
     if st is None:
         return
 
+    sqls = sorted(Path(tests_dir).glob("*.sql")) if Path(tests_dir).exists() else []
+    if not sqls:
+        return
     try:
-        from litmus.integrations.trust import check_table
-        failed = []
-        for t in tables:
-            suite = check_table(t)
-            if suite and suite.failed > 0:
-                failed.append((t, suite.failed))
-        if failed:
-            msg = ", ".join(f"{t} ({n})" for t, n in failed)
-            st.warning(f"Trust check failed: {msg}. Run `litmus check` for details.")
+        import duckdb
+        con = duckdb.connect(_warehouse_path(), read_only=True)
+        failing = []
+        for s in sqls:
+            try:
+                if con.execute(s.read_text()).fetchall():
+                    failing.append(s.stem)
+            except Exception:
+                continue
+        if failing:
+            st.warning(
+                "Failing data tests: " + ", ".join(failing) + ". Run `litmus test`."
+            )
     except Exception:
-        # Trust display is best-effort; never block the dashboard.
+        # Test display is best-effort; never block the dashboard.
         pass

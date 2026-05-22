@@ -1,6 +1,6 @@
 ---
 name: litmus-sync-notion
-description: Push current project state to the Notion playbook page — trust scorecard, pipeline status, dashboard URLs, recent activity. Idempotent. Run daily on a cron or manually after a big change. Add --weekly for the weekly rollup with wins / issues / next priorities.
+description: Push current project state to the Notion playbook page — data-test status, pipeline status, dashboard URLs, recent activity. Idempotent. Run daily on a cron or manually after a big change. Add --weekly for the weekly rollup with wins / issues / next priorities.
 ---
 
 # /litmus-sync-notion
@@ -21,21 +21,21 @@ This skill delegates to the **`ops-pilot`** agent — it's the only agent allowe
 
 1. Read `.litmus/state.json` to get the Notion page ID. If missing, run `/litmus-init` first.
 2. Gather current state:
-   - Litmus check results for every `mart_*` table (run `litmus check metrics/` → parse JSON).
-   - List of pipelines (`pipelines/*.yaml`) with last-run timestamps.
+   - Data-test results for every `mart_*` table (run `litmus test --json` → parse JSON).
+   - List of pipelines (`sources/*.yaml`) with last-run timestamps.
    - List of dashboards (`dashboards/*.py`) with their Streamlit URLs from `.litmus/state.json`.
    - Open Linear issues count (via Linear MCP server).
    - Last 5 agent-team actions from `.litmus/activity.log`.
-3. Delegate to `ops-pilot`: "update the Notion page at <id>, refresh the sections: Data sources, Pipelines, Dashboards, Trust scorecard, Open issues, Recent activity. Here's the payload: <...>"
+3. Delegate to `ops-pilot`: "update the Notion page at <id>, refresh the sections: Data sources, Pipelines, Dashboards, Data tests, Open issues, Recent activity. Here's the payload: <...>"
 4. `ops-pilot` performs idempotent block updates — finds existing blocks by heading, replaces their content.
 5. Reply with a one-line summary of what changed:
-   > "Notion synced. Trust score 94% (-1%). 2 dashboards. 3 open Linear issues (+1)."
+   > "Notion synced. 18/19 data tests passing (-1). 2 dashboards. 3 open Linear issues (+1)."
 
 ## Weekly variant (`--weekly`)
 
 Adds a sub-page under the project page titled "Week of <YYYY-MM-DD>" with:
-- Top 3 wins (new pipelines / dashboards shipped, trust improvements)
-- Top 3 issues (failed checks, blocked PRs, missed freshness)
+- Top 3 wins (new pipelines / dashboards shipped, data-test improvements)
+- Top 3 issues (failing data tests, blocked PRs, missed freshness)
 - Top 3 priorities for next week (suggested by `data-architect` based on open requests)
 
 Posts a summary to Slack if `LITMUS_SLACK_WEBHOOK_URL` is set.

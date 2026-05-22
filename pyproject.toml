@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "litmus-data"
-version = "0.4.0"
-description = "AI-agent-driven data engineering for teams without a data team, with a built-in trust engine"
+version = "0.5.0"
+description = "Your AI data agents team — install, point at your data, and the agents handle ingestion, transforms, dashboards, and tests"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "Litmus Contributors" }]
 maintainers = [{ name = "Zinnober Haus", email = "zinnober.haus@gmail.com" }]
-keywords = ["data", "metrics", "bdd", "data-quality", "trust"]
+keywords = ["data", "ai-agents", "data-engineering", "etl", "analytics", "duckdb"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -30,50 +30,18 @@ dependencies = [
     "rich>=13.0",
     "pyyaml>=6.0",
     "duckdb>=1.0.0",
-    "jinja2>=3.0",
     # Streamlit powers `litmus dashboard`. Included by default because the
     # bootstrap promises "open the dashboard" works out of the box.
     "streamlit>=1.30",
 ]
 
 [project.optional-dependencies]
-snowflake = ["snowflake-connector-python>=3.0"]
-bigquery = ["google-cloud-bigquery>=3.0"]
-postgres = ["psycopg2-binary>=2.9"]
-server = [
-    "fastapi>=0.110",
-    "uvicorn[standard]>=0.27",
-    "sqlalchemy>=2.0",
-    "pydantic>=2.5",
-    "httpx>=0.27",
-    "alembic>=1.13",
-]
-# AI-powered run explanations. Keeps the Anthropic SDK out of the slim
-# [server] install — only pulled in by operators who want "Why did this fail?"
-# on their hosted Litmus instance.
-ai = [
-    "anthropic>=0.40",
-]
-# BI-tool reconciliation. Kept out of [server] because Looker/Tableau SDKs
-# are heavy; operators who don't reconcile against a BI tool shouldn't pay
-# the install cost. Mocked in CI — no real BI creds required to run tests.
-bi = [
-    "looker-sdk>=23.0",
-    "tableauserverclient>=0.25",
-]
-all = ["litmus-data[snowflake,bigquery,postgres,server,ai,bi]"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
     "types-PyYAML>=6.0",
-    "fastapi>=0.110",
-    "sqlalchemy>=2.0",
-    "pydantic>=2.5",
-    "httpx>=0.27",
-    "anthropic>=0.40",
-    "alembic>=1.13",
 ]
 
 [project.scripts]
@@ -87,10 +55,9 @@ Issues = "https://github.com/zinnoberHaus/litmus/issues"
 Changelog = "https://github.com/zinnoberHaus/litmus/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
-include = ["litmus*", "litmus_api*"]
+include = ["litmus*"]
 
 [tool.setuptools.package-data]
-"litmus.generators" = ["assets/*.png"]
 # Bundle templates so `pipx install litmus-data` users get a complete
 # project scaffold (agents, skills, mcp config, sample pipeline) at runtime.
 "litmus.templates" = [
@@ -100,12 +67,6 @@ include = ["litmus*", "litmus_api*"]
     "claude/skills/*/SKILL.md",
     "sample_pipeline/README.md",
     "sample_pipeline/data/*.csv",
-    "sample_pipeline/pipelines/*.yaml",
-    "sample_pipeline/transforms/*.sql",
-    "sample_pipeline/metrics/*.metric",
-    "sample_pipeline/dashboards/*.py",
-    "sample_pipeline/semantic/*.yaml",
-    "sample_pipeline/semantic/*.md",
 ]
 
 [tool.ruff]

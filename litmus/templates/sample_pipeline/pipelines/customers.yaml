@@ -1,8 +1,0 @@
-source:
-  type: csv
-  path: ./data/raw/customers.csv
-target:
-  table: raw_customers
-  mode: replace
-  primary_key: customer_id
-schedule: manual

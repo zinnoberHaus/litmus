@@ -1,3 +1,3 @@
-"""Litmus — AI-agent-driven data engineering, with a built-in trust engine."""
+"""Litmus — your AI data agents team."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"

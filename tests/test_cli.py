@@ -4,68 +4,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from textwrap import dedent
 
 import pytest
 from click.testing import CliRunner
 
 from litmus.cli import main
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-_VALID_METRIC = dedent("""\
-    Metric: CLI Test Revenue
-    Description: Revenue metric for CLI testing
-    Owner: test-team
-    Tags: test
-
-    Source: orders
-
-    Given all records from orders table
-      And status is "completed"
-
-    When we calculate
-      Then sum the amount column
-
-    The result is "CLI Test Revenue"
-
-    Trust:
-      Freshness must be less than 24 hours
-      Null rate on amount must be less than 5%
-      Row count must not drop more than 25% day over day
-      Value must be between 0 and 1,000,000
-""")
-
 
 @pytest.fixture()
 def runner() -> CliRunner:
     return CliRunner()
-
-
-@pytest.fixture()
-def metric_file(tmp_path: Path) -> Path:
-    """Write a valid .metric file and return its path."""
-    p = tmp_path / "test_revenue.metric"
-    p.write_text(_VALID_METRIC, encoding="utf-8")
-    return p
-
-
-@pytest.fixture()
-def litmus_config(tmp_path: Path) -> Path:
-    """Write a minimal litmus.yml that uses in-memory DuckDB."""
-    cfg = tmp_path / "litmus.yml"
-    cfg.write_text(dedent("""\
-        version: 1
-        metrics_dir: metrics/
-        warehouse:
-          type: duckdb
-          database: ":memory:"
-        reporting:
-          format: console
-    """))
-    return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -82,78 +30,69 @@ class TestVersion:
 
 
 # ---------------------------------------------------------------------------
-# Parse command
-# ---------------------------------------------------------------------------
-
-
-class TestParseCommand:
-    def test_parse_valid_file(self, runner: CliRunner, metric_file: Path):
-        result = runner.invoke(main, ["parse", str(metric_file)])
-        assert result.exit_code == 0
-        assert "CLI Test Revenue" in result.output
-        assert "sources" in result.output.lower() or "orders" in result.output
-
-    def test_parse_shows_trust_rules(self, runner: CliRunner, metric_file: Path):
-        result = runner.invoke(main, ["parse", str(metric_file)])
-        assert result.exit_code == 0
-        assert "freshness" in result.output.lower()
-
-    def test_parse_nonexistent_file(self, runner: CliRunner):
-        result = runner.invoke(main, ["parse", "/nonexistent/path.metric"])
-        assert result.exit_code != 0
-
-
-# ---------------------------------------------------------------------------
-# Init command
+# Init command — the setup wizard
 # ---------------------------------------------------------------------------
 
 
 class TestInitCommand:
-    def test_init_cwd_mode(self, runner: CliRunner, tmp_path: Path):
-        """`litmus init` with no arg scaffolds into the current directory."""
+    """`litmus init` is the setup wizard — it builds the 'Litmus house':
+    a model choice, the chosen data sources, the transform/dashboard/test
+    framework, and the agent team. No trust-engine artifacts.
+    """
+
+    def test_init_cwd_mode_builds_the_house(self, runner: CliRunner, tmp_path: Path):
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(main, ["init", "--yes"])
+            result = runner.invoke(main, ["init", ".", "--yes", "--source", "warehouse"])
             assert result.exit_code == 0, result.output
-            assert Path("litmus.yml").exists()
-            assert Path("metrics").is_dir()
-            assert Path("metrics/example.metric").exists()
+            # Project config + framework folders.
+            assert Path("litmus.yaml").exists()
+            assert Path("sources/warehouse.yaml").exists()
+            assert Path("transforms").is_dir()
+            assert Path("dashboards").is_dir()
+            assert Path("tests").is_dir()
             assert Path(".env.example").exists()
-            assert Path(".gitignore").exists()
-            assert Path("README.md").exists()
-            # Default warehouse is duckdb, which seeds a demo file.
-            assert Path("demo.duckdb").exists()
-
-    def test_init_idempotent(self, runner: CliRunner, tmp_path: Path):
-        """Re-running in the same dir without --force is a no-op warning."""
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(main, ["init", "--yes"])
-            result = runner.invoke(main, ["init", "--yes"])
-            assert result.exit_code == 0
-            assert "already exists" in result.output
-            assert Path("litmus.yml").exists()
-            assert Path("metrics/example.metric").exists()
-
-    def test_init_with_project_name(self, runner: CliRunner, tmp_path: Path):
-        """`litmus init <name>` creates a subdirectory and scaffolds into it."""
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(main, ["init", "myproj", "--yes"])
-            assert result.exit_code == 0, result.output
-            assert Path("myproj/litmus.yml").exists()
-            assert Path("myproj/metrics/example.metric").exists()
-            assert Path("myproj/demo.duckdb").exists()
-            # Nothing leaked into cwd.
+            # Agent team.
+            assert Path(".claude/agents").is_dir()
+            assert any(Path(".claude/agents").glob("*.md"))
+            assert Path(".mcp.json").exists()
+            assert Path("AGENTS.md").exists()
+            assert Path(".litmus/state.json").exists()
+            assert Path(".litmus/context.md").exists()
+            # No trust-engine artifacts.
+            assert not Path("metrics").exists()
             assert not Path("litmus.yml").exists()
 
-    def test_init_prompts_for_project_name(self, runner: CliRunner, tmp_path: Path):
-        """`litmus init` with no args prompts for a project name (dbt-style)."""
+    def test_init_idempotent(self, runner: CliRunner, tmp_path: Path):
+        """Re-running is safe — existing files are kept, no error."""
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            # Three newlines after the name: accept default warehouse (duckdb)
-            # and default database (demo.duckdb).
-            result = runner.invoke(main, ["init"], input="sales-metrics\n\n\n")
+            runner.invoke(main, ["init", ".", "--yes", "--source", "warehouse"])
+            result = runner.invoke(main, ["init", ".", "--yes", "--source", "warehouse"])
             assert result.exit_code == 0, result.output
-            assert "Project name" in result.output
-            assert Path("sales-metrics/litmus.yml").exists()
-            assert Path("sales-metrics/metrics/example.metric").exists()
+            assert Path("litmus.yaml").exists()
+
+    def test_init_with_project_name(self, runner: CliRunner, tmp_path: Path):
+        """`litmus init <name>` builds into a subdirectory, nothing leaks to cwd."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(main, ["init", "myproj", "--yes", "--source", "warehouse"])
+            assert result.exit_code == 0, result.output
+            assert Path("myproj/litmus.yaml").exists()
+            assert Path("myproj/.claude/agents").is_dir()
+            assert Path("myproj/.litmus/state.json").exists()
+            assert not Path("litmus.yaml").exists()
+            assert not Path(".claude").exists()
+
+    def test_init_prompts_for_model_and_sources(self, runner: CliRunner, tmp_path: Path):
+        """Interactive: name → model number → source numbers."""
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            # name=my-biz, model #1 (Claude Opus), sources "3" (Postgres).
+            result = runner.invoke(main, ["init"], input="my-biz\n1\n3\n")
+            assert result.exit_code == 0, result.output
+            assert "Pick an AI model" in result.output
+            assert "Choose your data inflow" in result.output
+            cfg = Path("litmus.yaml").read_text()
+            assert "claude-opus-4-7" in cfg
+            assert "postgres" in cfg
+            assert Path("sources/postgres.yaml").exists()
 
     def test_init_refuses_nonempty_directory(self, runner: CliRunner, tmp_path: Path):
         with runner.isolated_filesystem(temp_dir=tmp_path):
@@ -163,119 +102,70 @@ class TestInitCommand:
             assert result.exit_code != 0
             assert "already exists" in result.output
 
-    def test_init_postgres_skips_seed(self, runner: CliRunner, tmp_path: Path):
-        """Non-local warehouses scaffold config but no demo DB file."""
+    def test_init_model_and_source_flags(self, runner: CliRunner, tmp_path: Path):
+        """Flags pre-fill the wizard; multiple --source values are honored."""
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(
                 main,
-                ["init", "pgproj", "--warehouse", "postgres",
-                 "--database", "analytics", "--yes"],
+                ["init", ".", "--yes", "--model", "claude-opus",
+                 "--source", "postgres", "--source", "stripe"],
             )
             assert result.exit_code == 0, result.output
-            cfg = Path("pgproj/litmus.yml").read_text()
-            assert "type: postgres" in cfg
-            assert "database: analytics" in cfg
-            # No seeded database file.
-            assert not any(p.suffix in (".duckdb", ".sqlite") for p in Path("pgproj").iterdir())
+            cfg = Path("litmus.yaml").read_text()
+            assert "claude-opus-4-7" in cfg
+            assert Path("sources/postgres.yaml").exists()
+            assert Path("sources/stripe.yaml").exists()
+            env = Path(".env.example").read_text()
+            assert "PGHOST" in env
+            assert "STRIPE_API_KEY" in env
 
-    def test_init_sqlite_seeds_demo(self, runner: CliRunner, tmp_path: Path):
-        with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(
-                main, ["init", "sqlproj", "--warehouse", "sqlite", "--yes"]
-            )
-            assert result.exit_code == 0, result.output
-            assert Path("sqlproj/demo.sqlite").exists()
-            cfg = Path("sqlproj/litmus.yml").read_text()
-            assert "type: sqlite" in cfg
+    def test_init_sample_loads_warehouse(self, runner: CliRunner, tmp_path: Path):
+        """The sample source copies CSVs and loads DuckDB tables."""
+        import duckdb
 
-    def test_init_installs_agent_team(self, runner: CliRunner, tmp_path: Path):
-        """`litmus init` incorporates the agent team into the repo — the
-        same scaffold the bare-`litmus` TUI lays down.
-        """
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(main, ["init", "--yes"])
+            result = runner.invoke(main, ["init", ".", "--yes", "--source", "sample"])
             assert result.exit_code == 0, result.output
-            # Agent team scaffold landed.
-            assert Path(".claude/agents").is_dir()
-            assert any(Path(".claude/agents").glob("*.md"))
-            assert Path(".claude/skills").is_dir()
-            assert Path(".mcp.json").exists()
-            assert Path("AGENTS.md").exists()
-            # Project marked initialized so bare `litmus` skips bootstrap.
-            assert Path(".litmus/state.json").exists()
+            assert Path("data/raw/transactions.csv").exists()
+            con = duckdb.connect("data/warehouse.duckdb", read_only=True)
+            tables = {
+                r[0]
+                for r in con.execute(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'main'"
+                ).fetchall()
+            }
+            assert "transactions" in tables
+
+    def test_init_state_marks_initialized(self, runner: CliRunner, tmp_path: Path):
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runner.invoke(main, ["init", ".", "--yes", "--source", "warehouse"])
             state = json.loads(Path(".litmus/state.json").read_text())
             assert state["initialized"] is True
+            assert state["model"]["provider"] == "anthropic"
+            assert "warehouse" in state["sources"]
 
-    def test_init_subdir_does_not_leak_team_into_cwd(
-        self, runner: CliRunner, tmp_path: Path
-    ):
-        """`litmus init <name>` keeps the team scaffold inside the subdir."""
+
+# ---------------------------------------------------------------------------
+# Test command — runs tests/*.sql
+# ---------------------------------------------------------------------------
+
+
+class TestTestCommand:
+    def test_test_runs_sql_checks(self, runner: CliRunner, tmp_path: Path):
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(main, ["init", "teamproj", "--yes"])
+            runner.invoke(main, ["init", ".", "--yes", "--source", "sample"])
+            # The sample loads a 'transactions' table; the generated not_empty
+            # test should pass against it.
+            result = runner.invoke(main, ["test"])
             assert result.exit_code == 0, result.output
-            assert Path("teamproj/.claude/agents").is_dir()
-            assert Path("teamproj/.mcp.json").exists()
-            assert Path("teamproj/.litmus/state.json").exists()
-            # Nothing leaked into cwd.
-            assert not Path(".claude").exists()
-            assert not Path(".mcp.json").exists()
+            assert "passed" in result.output.lower()
 
-
-# ---------------------------------------------------------------------------
-# Explain command
-# ---------------------------------------------------------------------------
-
-
-class TestExplainCommand:
-    def test_explain_produces_output(self, runner: CliRunner, metric_file: Path):
-        result = runner.invoke(main, ["explain", str(metric_file)])
-        assert result.exit_code == 0
-        assert "CLI Test Revenue" in result.output
-
-    def test_explain_includes_trust_description(self, runner: CliRunner, metric_file: Path):
-        result = runner.invoke(main, ["explain", str(metric_file)])
-        assert result.exit_code == 0
-        # The plain_english generator mentions trust checks
-        output = result.output.lower()
-        assert (
-            "hours" in output
-            or "trust" in output
-            or "check" in output
-        )
-
-
-# ---------------------------------------------------------------------------
-# Check command
-# ---------------------------------------------------------------------------
-
-
-class TestCheckCommand:
-    def test_check_with_duckdb(
-        self, runner: CliRunner, metric_file: Path, litmus_config: Path
-    ):
-        """Run check against an in-memory DuckDB.
-
-        The DuckDB will have no orders table, so trust checks will
-        produce errors, but the CLI should still run to completion and
-        render output.
-        """
-        result = runner.invoke(
-            main, ["check", str(metric_file), "-c", str(litmus_config)]
-        )
-        # The check command exits 1 when checks fail/error, which is expected
-        # here since there is no actual table. The key assertion is that it
-        # does not crash with an unhandled exception.
-        assert result.exit_code in (0, 1)
-        # Should produce some output (either results or error info)
-        assert len(result.output) > 0
-
-    def test_check_nonexistent_path(self, runner: CliRunner):
-        result = runner.invoke(main, ["check", "/nonexistent/path.metric"])
-        assert result.exit_code != 0
-
-    def test_check_directory_no_metrics(self, runner: CliRunner, tmp_path: Path):
-        empty_dir = tmp_path / "empty_metrics"
-        empty_dir.mkdir()
-        result = runner.invoke(main, ["check", str(empty_dir)])
-        assert result.exit_code != 0
-        assert "no .metric files" in result.output.lower() or "not found" in result.output.lower()
+    def test_test_fails_on_problem_rows(self, runner: CliRunner, tmp_path: Path):
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runner.invoke(main, ["init", ".", "--yes", "--source", "sample"])
+            # A test that always returns a row must fail the run.
+            Path("tests/always_fails.sql").write_text("SELECT 1 AS problem;")
+            result = runner.invoke(main, ["test"])
+            assert result.exit_code == 1
+            assert "failed" in result.output.lower()

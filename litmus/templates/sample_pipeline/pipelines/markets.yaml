@@ -1,8 +1,0 @@
-source:
-  type: csv
-  path: ./data/raw/markets.csv
-target:
-  table: raw_markets
-  mode: replace
-  primary_key: market_id
-schedule: manual
