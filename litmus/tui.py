@@ -838,7 +838,8 @@ def _action_assets() -> None:
     out.add_column("Description", style="dim")
     for (tname,) in tables:
         try:
-            (count,) = con.execute(f'SELECT COUNT(*) FROM "{tname}"').fetchone()
+            row = con.execute(f'SELECT COUNT(*) FROM "{tname}"').fetchone()
+            count = row[0] if row else 0
         except Exception:
             count = "?"
         ent = table_to_entity.get(tname, {})
@@ -939,7 +940,8 @@ def _action_health() -> None:
                 db_path = warehouse_url.replace("duckdb:///", "").replace("duckdb://", "")
                 if Path(db_path).exists():
                     con = duckdb.connect(db_path, read_only=True)
-                    (count,) = con.execute(f'SELECT COUNT(*) FROM "{tbl}"').fetchone()
+                    crow = con.execute(f'SELECT COUNT(*) FROM "{tbl}"').fetchone()
+                    count = crow[0] if crow else 0
                     console.print(
                         f"  [green]✓[/green] {p.stem:<20} → {tbl} "
                         f"[dim]({count:,} rows)[/dim]"
